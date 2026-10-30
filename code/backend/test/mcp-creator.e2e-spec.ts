@@ -32,7 +32,7 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.text).toContain('check-in');
   });
 
-  it('/api/v1/generate (POST) should scan and generate an MCP server', async () => {
+  it('/api/v1/generate (POST) should scan and generate an initial MCP server', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/generate')
       .send({ url: mockHotelFileUrl });
@@ -85,4 +85,22 @@ describe('McpCreatorController (e2e)', () => {
       'Reservation Confirmed',
     );
   }, 30000);
+
+  it('/api/v1/servers/:id/enrich/wordpress (POST) should handle invalid WP endpoint gracefully', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/servers/latest/enrich/wordpress')
+      .send({ wpUrl: 'http://127.0.0.1:9999/wp-json' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Unable to reach WordPress REST API');
+  });
+
+  it('/api/v1/servers/:id/enrich/github (POST) should handle invalid repo URL gracefully', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/servers/latest/enrich/github')
+      .send({ repoUrl: 'not-a-valid-url' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Invalid GitHub repository URL');
+  });
 });

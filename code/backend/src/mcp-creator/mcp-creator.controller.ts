@@ -16,12 +16,15 @@ import {
   GenerateRequestDto,
   ScanRequestDto,
   ToolCallRequestDto,
+  EnrichWordpressDto,
+  EnrichGithubDto,
 } from './mcp-creator.dto.js';
 import type {
   ToolCallResponse,
   GenerateResponse,
   WebScanResult,
   MCPServerConfig,
+  EnrichResponse,
 } from './mcp-creator.types.js';
 
 @ApiTags('MCP Creator')
@@ -72,7 +75,7 @@ export class McpCreatorController {
     return this.mcpCreatorService.scanWebsite(dto.url);
   }
 
-  @ApiOperation({ summary: 'Scan a hotel website and dynamically generate an MCP server' })
+  @ApiOperation({ summary: 'Scan a hotel website and dynamically generate an initial MCP server' })
   @Post('api/v1/generate')
   async generate(@Body() dto: GenerateRequestDto): Promise<GenerateResponse> {
     return this.mcpCreatorService.generate(dto.url);
@@ -91,7 +94,7 @@ export class McpCreatorController {
     return this.mcpCreatorService.getServer(id);
   }
 
-  @ApiOperation({ summary: 'Execute an MCP tool via Playwright on the live website' })
+  @ApiOperation({ summary: 'Execute an MCP tool via direct API or Playwright on the live website' })
   @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
   @Post('api/v1/servers/:id/call')
   async callTool(
@@ -99,5 +102,30 @@ export class McpCreatorController {
     @Body() req: ToolCallRequestDto,
   ): Promise<ToolCallResponse> {
     return this.mcpCreatorService.callTool(id, req.tool_name, req.arguments || {});
+  }
+
+  @ApiOperation({ summary: 'Enrich an MCP server using WordPress REST API (/wp-json)' })
+  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
+  @Post('api/v1/servers/:id/enrich/wordpress')
+  async enrichWordpress(
+    @Param('id') id: string,
+    @Body() dto: EnrichWordpressDto,
+  ): Promise<EnrichResponse> {
+    return this.mcpCreatorService.enrichWithWordpress(id, dto.wpUrl);
+  }
+
+  @ApiOperation({ summary: 'Enrich an MCP server using GitHub codebase analysis & OpenAPI specs' })
+  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
+  @Post('api/v1/servers/:id/enrich/github')
+  async enrichGithub(
+    @Param('id') id: string,
+    @Body() dto: EnrichGithubDto,
+  ): Promise<EnrichResponse> {
+    return this.mcpCreatorService.enrichWithGithub(
+      id,
+      dto.repoUrl,
+      dto.branch || 'main',
+      dto.githubToken,
+    );
   }
 }

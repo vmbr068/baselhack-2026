@@ -32,6 +32,52 @@ export class ExecutorService {
       };
     }
 
+    // Direct API Execution (if tool was enriched with a direct backend API endpoint)
+    if (toolDef.apiEndpoint) {
+      try {
+        this.logger.log(
+          `Executing tool '${toolName}' via direct API: ${toolDef.apiMethod || 'POST'} ${toolDef.apiEndpoint}`,
+        );
+        const method = toolDef.apiMethod || 'POST';
+        const isGet = method.toUpperCase() === 'GET';
+        let url = toolDef.apiEndpoint;
+        if (isGet && Object.keys(args).length > 0) {
+          const params = new URLSearchParams();
+          for (const [k, v] of Object.entries(args)) {
+            if (v !== undefined && v !== null) params.append(k, String(v));
+          }
+          url += (url.includes('?') ? '&' : '?') + params.toString();
+        }
+
+        const apiRes = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: !isGet ? JSON.stringify(args) : undefined,
+          signal: AbortSignal.timeout(6000),
+        });
+
+        if (apiRes.ok) {
+          const apiData = await apiRes.json().catch(() => ({ status: 'success' }));
+          return {
+            tool_name: toolName,
+            success: true,
+            data: apiData,
+            executedVia: 'api',
+          };
+        }
+        this.logger.warn(
+          `Direct API call returned status ${apiRes.status}, seamlessly falling back to Playwright browser automation`,
+        );
+      } catch (apiErr: any) {
+        this.logger.warn(
+          `Direct API call encountered error: ${apiErr.message}, falling back to Playwright`,
+        );
+      }
+    }
+
     const selectors = toolDef.selectorsMapping;
     const browser: Browser = await chromium.launch({ headless });
     const context = await browser.newContext({

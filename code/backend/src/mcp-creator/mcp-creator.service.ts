@@ -9,11 +9,14 @@ import * as fs from 'node:fs/promises';
 import { ScannerService } from './scanner.service.js';
 import { SynthesizerService } from './synthesizer.service.js';
 import { ExecutorService } from './executor.service.js';
+import { WordpressEnricherService } from './enrichers/wordpress-enricher.service.js';
+import { GithubEnricherService } from './enrichers/github-enricher.service.js';
 import {
   MCPServerConfig,
   WebScanResult,
   GenerateResponse,
   ToolCallResponse,
+  EnrichResponse,
 } from './mcp-creator.types.js';
 
 @Injectable()
@@ -29,6 +32,8 @@ export class McpCreatorService implements OnModuleInit {
     private readonly scanner: ScannerService,
     private readonly synthesizer: SynthesizerService,
     private readonly executor: ExecutorService,
+    private readonly wpEnricher: WordpressEnricherService,
+    private readonly ghEnricher: GithubEnricherService,
   ) {}
 
   async onModuleInit() {
@@ -119,5 +124,45 @@ export class McpCreatorService implements OnModuleInit {
   ): Promise<ToolCallResponse> {
     const config = this.getServer(serverId);
     return this.executor.executeTool(config, toolName, args);
+  }
+
+  async enrichWithWordpress(serverId: string, customWpUrl?: string): Promise<EnrichResponse> {
+    const config = this.getServer(serverId);
+    const { enrichedConfig, summary } = await this.wpEnricher.enrichWithWordpress(config, customWpUrl);
+    await this.persistServer(enrichedConfig);
+
+    return {
+      server_id: enrichedConfig.serverId,
+      hotel_name: enrichedConfig.hotelName,
+      source: 'wordpress',
+      enriched_tools_count: enrichedConfig.tools.length,
+      tools: enrichedConfig.tools,
+      summary,
+    };
+  }
+
+  async enrichWithGithub(
+    serverId: string,
+    repoUrl: string,
+    branch = 'main',
+    githubToken?: string,
+  ): Promise<EnrichResponse> {
+    const config = this.getServer(serverId);
+    const { enrichedConfig, summary } = await this.ghEnricher.enrichWithGithub(
+      config,
+      repoUrl,
+      branch,
+      githubToken,
+    );
+    await this.persistServer(enrichedConfig);
+
+    return {
+      server_id: enrichedConfig.serverId,
+      hotel_name: enrichedConfig.hotelName,
+      source: 'github',
+      enriched_tools_count: enrichedConfig.tools.length,
+      tools: enrichedConfig.tools,
+      summary,
+    };
   }
 }

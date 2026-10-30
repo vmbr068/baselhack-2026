@@ -34,3 +34,32 @@ export class ToolCallRequestDto {
   })
   arguments?: Record<string, any>;
 }
+
+export class EnrichWordpressDto {
+  @ApiPropertyOptional({
+    description: 'WordPress site URL or REST API root (defaults to the target URL of the MCP server)',
+    example: 'https://hotel-basel-demo.ch/wp-json',
+  })
+  wpUrl?: string;
+}
+
+export class EnrichGithubDto {
+  @ApiProperty({
+    description: 'Public or private GitHub repository URL containing the website codebase',
+    example: 'https://github.com/basel-hackathon/hotel-booking-service',
+  })
+  repoUrl!: string;
+
+  @ApiPropertyOptional({
+    description: 'Git branch to analyze (default: main)',
+    example: 'main',
+    default: 'main',
+  })
+  branch?: string;
+
+  @ApiPropertyOptional({
+    description: 'GitHub Personal Access Token for private repositories or higher rate limits',
+    example: 'ghp_xxxxxxxxxxxxxxxxxxxx',
+  })
+  githubToken?: string;
+}

@@ -37,6 +37,10 @@ export interface MCPToolDefinition {
   parameters: Record<string, any>;
   executionStep: 'check_availability' | 'reserve_room' | 'get_screenshot';
   selectorsMapping: Record<string, string>;
+  executionMode?: 'browser' | 'api' | 'hybrid';
+  apiEndpoint?: string;
+  apiMethod?: 'GET' | 'POST' | 'PUT';
+  sourceOrigin?: 'dom' | 'wordpress' | 'github';
 }
 
 export interface MCPServerConfig {
@@ -46,6 +50,11 @@ export interface MCPServerConfig {
   createdAt: string;
   tools: MCPToolDefinition[];
   scanSummary: Record<string, any>;
+  codebaseEnrichment?: {
+    source: 'wordpress' | 'github';
+    details: Record<string, any>;
+    enrichedAt: string;
+  };
 }
 
 export interface ToolCallRequest {
@@ -59,6 +68,7 @@ export interface ToolCallResponse {
   data: Record<string, any>;
   screenshot_url?: string | null;
   error?: string | null;
+  executedVia?: 'browser' | 'api';
 }
 
 export interface GenerateResponse {
@@ -76,4 +86,13 @@ export interface GenerateResponse {
       inputSchema: Record<string, any>;
     }>;
   };
+}
+
+export interface EnrichResponse {
+  server_id: string;
+  hotel_name: string;
+  source: 'wordpress' | 'github';
+  enriched_tools_count: number;
+  tools: MCPToolDefinition[];
+  summary: Record<string, any>;
 }

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+static/screenshots/*.png
+!static/screenshots/.gitkeep
+generated_servers/*.json
+!generated_servers/.gitkeep

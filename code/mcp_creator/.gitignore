@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+static/screenshots/*.png
+!static/screenshots/.gitkeep
+generated_servers/*.py
+generated_servers/*.json
+!generated_servers/.gitkeep

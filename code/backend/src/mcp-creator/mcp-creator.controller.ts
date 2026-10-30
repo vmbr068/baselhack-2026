@@ -53,6 +53,72 @@ export class McpCreatorController {
     }
   }
 
+  @ApiOperation({
+    summary: 'Mock WordPress REST API index for local enrichment testing',
+  })
+  @Get('mock-wp/wp-json')
+  serveMockWordpress(): Record<string, any> {
+    return {
+      name: 'Grand Hotel Basel (WordPress Demo)',
+      namespaces: ['wp/v2', 'hotel/v1', 'mphb/v1'],
+      routes: {
+        '/hotel/v1/availability': {
+          endpoints: [
+            {
+              methods: ['GET'],
+              args: {
+                check_in: {
+                  type: 'string',
+                  required: true,
+                  description: 'Arrival date (YYYY-MM-DD)',
+                },
+                check_out: {
+                  type: 'string',
+                  required: true,
+                  description: 'Departure date (YYYY-MM-DD)',
+                },
+                adults: {
+                  type: 'integer',
+                  default: 2,
+                  description: 'Number of adults',
+                },
+              },
+            },
+          ],
+        },
+        '/hotel/v1/reserve': {
+          endpoints: [
+            {
+              methods: ['POST'],
+              args: {
+                room_id: {
+                  type: 'string',
+                  required: true,
+                  description: 'Unique room identifier',
+                },
+                guest_name: {
+                  type: 'string',
+                  required: true,
+                  description: 'Full name',
+                },
+                guest_email: {
+                  type: 'string',
+                  required: true,
+                  description: 'Email address',
+                },
+                special_requests: {
+                  type: 'string',
+                  required: false,
+                  description: 'Preferences',
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+  }
+
   @ApiOperation({ summary: 'Retrieve an action or confirmation screenshot' })
   @ApiParam({ name: 'filename', example: 'confirm_123456789.png' })
   @Get('static/screenshots/:filename')
@@ -69,13 +135,18 @@ export class McpCreatorController {
     }
   }
 
-  @ApiOperation({ summary: 'Scan a website and extract DOM forms, inputs, and buttons' })
+  @ApiOperation({
+    summary: 'Scan a website and extract DOM forms, inputs, and buttons',
+  })
   @Post('api/v1/scan')
   async scan(@Body() dto: ScanRequestDto): Promise<WebScanResult> {
     return this.mcpCreatorService.scanWebsite(dto.url);
   }
 
-  @ApiOperation({ summary: 'Scan a hotel website and dynamically generate an initial MCP server' })
+  @ApiOperation({
+    summary:
+      'Scan a hotel website and dynamically generate an initial MCP server',
+  })
   @Post('api/v1/generate')
   async generate(@Body() dto: GenerateRequestDto): Promise<GenerateResponse> {
     return this.mcpCreatorService.generate(dto.url);
@@ -87,25 +158,48 @@ export class McpCreatorController {
     return this.mcpCreatorService.listServers();
   }
 
-  @ApiOperation({ summary: 'Get tool schemas and configuration for an MCP server' })
-  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
+  @ApiOperation({
+    summary: 'Get tool schemas and configuration for an MCP server',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 'latest',
+    description: 'Server ID or "latest"',
+  })
   @Get('api/v1/servers/:id')
   getServer(@Param('id') id: string): MCPServerConfig {
     return this.mcpCreatorService.getServer(id);
   }
 
-  @ApiOperation({ summary: 'Execute an MCP tool via direct API or Playwright on the live website' })
-  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
+  @ApiOperation({
+    summary:
+      'Execute an MCP tool via direct API or Playwright on the live website',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 'latest',
+    description: 'Server ID or "latest"',
+  })
   @Post('api/v1/servers/:id/call')
   async callTool(
     @Param('id') id: string,
     @Body() req: ToolCallRequestDto,
   ): Promise<ToolCallResponse> {
-    return this.mcpCreatorService.callTool(id, req.tool_name, req.arguments || {});
+    return this.mcpCreatorService.callTool(
+      id,
+      req.tool_name,
+      req.arguments || {},
+    );
   }
 
-  @ApiOperation({ summary: 'Enrich an MCP server using WordPress REST API (/wp-json)' })
-  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
+  @ApiOperation({
+    summary: 'Enrich an MCP server using WordPress REST API (/wp-json)',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 'latest',
+    description: 'Server ID or "latest"',
+  })
   @Post('api/v1/servers/:id/enrich/wordpress')
   async enrichWordpress(
     @Param('id') id: string,
@@ -114,8 +208,15 @@ export class McpCreatorController {
     return this.mcpCreatorService.enrichWithWordpress(id, dto.wpUrl);
   }
 
-  @ApiOperation({ summary: 'Enrich an MCP server using GitHub codebase analysis & OpenAPI specs' })
-  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
+  @ApiOperation({
+    summary:
+      'Enrich an MCP server using GitHub codebase analysis & OpenAPI specs',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 'latest',
+    description: 'Server ID or "latest"',
+  })
   @Post('api/v1/servers/:id/enrich/github')
   async enrichGithub(
     @Param('id') id: string,

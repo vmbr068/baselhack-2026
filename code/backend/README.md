@@ -23,7 +23,16 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+NestJS backend application with integrated **Model Context Protocol (MCP) Creator** for scanning hotel booking websites and executing reservation tools dynamically.
+
+### MCP Creator Endpoints
+
+- `POST /api/v1/generate`: Scans a hotel URL, synthesizes MCP tools, and registers the server (`{ "url": "..." }`).
+- `POST /api/v1/scan`: Scans a URL and returns extracted forms, inputs, and buttons.
+- `GET /api/v1/servers`: Lists all active/generated MCP servers.
+- `GET /api/v1/servers/:id`: Retrieves tool schemas for a specific MCP server.
+- `POST /api/v1/servers/:id/call`: Executes an MCP tool (`check_availability` or `reserve_room`) via Playwright on the live site.
+- `GET /mock-hotel`: Local Swiss hotel booking page for self-contained testing.
 
 ## Project setup
 

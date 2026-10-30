@@ -7,6 +7,7 @@ import {
   Res,
   NotFoundException,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import type { Response } from 'express';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
@@ -23,6 +24,7 @@ import type {
   MCPServerConfig,
 } from './mcp-creator.types.js';
 
+@ApiTags('MCP Creator')
 @Controller()
 export class McpCreatorController {
   private readonly mockHotelPath = path.resolve(
@@ -36,6 +38,7 @@ export class McpCreatorController {
 
   constructor(private readonly mcpCreatorService: McpCreatorService) {}
 
+  @ApiOperation({ summary: 'Serve the local demo hotel website' })
   @Get('mock-hotel')
   async serveMockHotel(@Res() res: Response): Promise<void> {
     try {
@@ -47,6 +50,8 @@ export class McpCreatorController {
     }
   }
 
+  @ApiOperation({ summary: 'Retrieve an action or confirmation screenshot' })
+  @ApiParam({ name: 'filename', example: 'confirm_123456789.png' })
   @Get('static/screenshots/:filename')
   async serveScreenshot(
     @Param('filename') filename: string,
@@ -61,35 +66,38 @@ export class McpCreatorController {
     }
   }
 
+  @ApiOperation({ summary: 'Scan a website and extract DOM forms, inputs, and buttons' })
   @Post('api/v1/scan')
   async scan(@Body() dto: ScanRequestDto): Promise<WebScanResult> {
     return this.mcpCreatorService.scanWebsite(dto.url);
   }
 
+  @ApiOperation({ summary: 'Scan a hotel website and dynamically generate an MCP server' })
   @Post('api/v1/generate')
   async generate(@Body() dto: GenerateRequestDto): Promise<GenerateResponse> {
     return this.mcpCreatorService.generate(dto.url);
   }
 
+  @ApiOperation({ summary: 'List all registered MCP servers' })
   @Get('api/v1/servers')
   listServers(): MCPServerConfig[] {
     return this.mcpCreatorService.listServers();
   }
 
+  @ApiOperation({ summary: 'Get tool schemas and configuration for an MCP server' })
+  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
   @Get('api/v1/servers/:id')
   getServer(@Param('id') id: string): MCPServerConfig {
     return this.mcpCreatorService.getServer(id);
   }
 
+  @ApiOperation({ summary: 'Execute an MCP tool via Playwright on the live website' })
+  @ApiParam({ name: 'id', example: 'latest', description: 'Server ID or "latest"' })
   @Post('api/v1/servers/:id/call')
   async callTool(
     @Param('id') id: string,
     @Body() req: ToolCallRequestDto,
   ): Promise<ToolCallResponse> {
-    return this.mcpCreatorService.callTool(
-      id,
-      req.tool_name,
-      req.arguments || {},
-    );
+    return this.mcpCreatorService.callTool(id, req.tool_name, req.arguments || {});
   }
 }

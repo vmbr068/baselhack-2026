@@ -17,6 +17,7 @@ import {
   GenerateResponse,
   ToolCallResponse,
   EnrichResponse,
+  AuthSessionData,
 } from './mcp-creator.types.js';
 
 @Injectable()
@@ -66,13 +67,25 @@ export class McpCreatorService implements OnModuleInit {
     await fs.writeFile(filePath, JSON.stringify(config, null, 2), 'utf-8');
   }
 
-  async scanWebsite(url: string): Promise<WebScanResult> {
-    return this.scanner.scanWebsite(url);
+  async scanWebsite(
+    url: string,
+    authSession?: AuthSessionData | string,
+  ): Promise<WebScanResult> {
+    return this.scanner.scanWebsite(url, authSession);
   }
 
-  async generate(url: string): Promise<GenerateResponse> {
-    const scanResult = await this.scanner.scanWebsite(url);
+  async generate(
+    url: string,
+    authSession?: AuthSessionData | string,
+  ): Promise<GenerateResponse> {
+    const scanResult = await this.scanner.scanWebsite(url, authSession);
     const config = this.synthesizer.synthesizeMCPServer(scanResult);
+
+    if (authSession) {
+      config.authSession =
+        typeof authSession === 'string' ? JSON.parse(authSession) : authSession;
+    }
+
     await this.persistServer(config);
 
     return {
@@ -81,6 +94,7 @@ export class McpCreatorService implements OnModuleInit {
       target_url: config.targetUrl,
       tools: config.tools,
       call_endpoint: `/api/v1/servers/${config.serverId}/call`,
+      has_auth_session: Boolean(config.authSession),
       mcp_schema: {
         name: config.hotelName,
         server_id: config.serverId,
@@ -123,6 +137,7 @@ export class McpCreatorService implements OnModuleInit {
     args: Record<string, any> = {},
     confirmedByHuman?: boolean,
     confirmationToken?: string,
+    authSession?: AuthSessionData | string,
   ): Promise<ToolCallResponse> {
     const config = this.getServer(serverId);
     return this.executor.executeTool(
@@ -131,6 +146,7 @@ export class McpCreatorService implements OnModuleInit {
       args,
       confirmedByHuman,
       confirmationToken,
+      authSession,
     );
   }
 

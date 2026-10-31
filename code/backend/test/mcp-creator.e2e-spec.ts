@@ -12,6 +12,8 @@ describe('McpCreatorController (e2e)', () => {
     path.resolve(process.cwd(), 'mock_hotel/index.html'),
   ).href;
 
+  let baseUrl: string;
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -19,6 +21,11 @@ describe('McpCreatorController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+    await app.listen(0);
+
+    const address = app.getHttpServer().address();
+    const port = typeof address === 'object' && address ? address.port : 3000;
+    baseUrl = `http://localhost:${port}`;
   });
 
   afterAll(async () => {
@@ -30,6 +37,20 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('Grand Hotel Basel');
     expect(res.text).toContain('check-in');
+  });
+
+  it('/mock-hotel/vip (GET) should enforce authentication via cookie', async () => {
+    // Unauthenticated
+    const unauthRes = await request(app.getHttpServer()).get('/mock-hotel/vip');
+    expect(unauthRes.status).toBe(401);
+    expect(unauthRes.text).toContain('VIP Lounge - Authentication Required');
+
+    // Authenticated
+    const authRes = await request(app.getHttpServer())
+      .get('/mock-hotel/vip')
+      .set('Cookie', 'session_id=vip_session_token_123');
+    expect(authRes.status).toBe(200);
+    expect(authRes.text).toContain('Executive VIP Penthouse Suite');
   });
 
   it('/api/v1/generate (POST) should scan and generate an initial MCP server', async () => {
@@ -175,4 +196,51 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toContain('Invalid GitHub repository URL');
   });
+
+  let vipServerId: string;
+
+  it('/api/v1/generate (POST) should scan and generate an MCP for an authenticated portal using delegated auth session', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/generate')
+      .send({
+        url: `${baseUrl}/mock-hotel/vip`,
+        auth_session: {
+          cookies: [
+            {
+              name: 'session_id',
+              value: 'vip_session_token_123',
+              domain: 'localhost',
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.server_id).toBeDefined();
+    expect(res.body.has_auth_session).toBe(true);
+    expect(res.body.hotel_name).toContain('VIP');
+    vipServerId = res.body.server_id;
+  }, 30000);
+
+  it('/api/v1/servers/:id/call (POST) should execute reserve_room on authenticated portal using stored delegated session', async () => {
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/servers/${vipServerId}/call`)
+      .send({
+        tool_name: 'reserve_room',
+        confirmed_by_human: true,
+        arguments: {
+          room_title: 'Executive VIP Penthouse Suite',
+          guest_name: 'Executive Member',
+          guest_email: 'vip@baselhack.ch',
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('executed');
+    expect(res.body.data.status).toBe('confirmed');
+    expect(res.body.data.confirmation_summary).toContain(
+      'Reservation Confirmed',
+    );
+  }, 30000);
 });

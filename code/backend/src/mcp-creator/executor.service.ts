@@ -2,7 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { chromium, Browser } from 'playwright';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { MCPServerConfig, ToolCallResponse } from './mcp-creator.types.js';
+import {
+  MCPServerConfig,
+  ToolCallResponse,
+  AuthSessionData,
+} from './mcp-creator.types.js';
+import { normalizeAuthSession } from './auth-session.helper.js';
 
 @Injectable()
 export class ExecutorService {
@@ -31,6 +36,7 @@ export class ExecutorService {
     args: Record<string, any> = {},
     confirmedByHuman?: boolean,
     confirmationToken?: string,
+    authSessionOverride?: AuthSessionData | string,
     headless = true,
   ): Promise<ToolCallResponse> {
     const toolDef = config.tools.find((t) => t.name === toolName);
@@ -43,6 +49,13 @@ export class ExecutorService {
         error: `Tool '${toolName}' not found in configuration for ${config.hotelName}`,
       };
     }
+
+    const sessionToUse =
+      authSessionOverride || args.auth_session || config.authSession;
+    const { storageState, extraHeaders } = normalizeAuthSession(
+      sessionToUse,
+      config.targetUrl,
+    );
 
     // Determine if tool represents an irreversible action (e.g. reservation, booking, payment)
     const isIrreversible = Boolean(
@@ -151,12 +164,20 @@ export class ExecutorService {
           url += (url.includes('?') ? '&' : '?') + params.toString();
         }
 
+        const apiHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...extraHeaders,
+        };
+        if (storageState?.cookies?.length) {
+          apiHeaders['Cookie'] = storageState.cookies
+            .map((c) => `${c.name}=${c.value}`)
+            .join('; ');
+        }
+
         const apiRes = await fetch(url, {
           method,
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
+          headers: apiHeaders,
           body: !isGet ? JSON.stringify(args) : undefined,
           signal: AbortSignal.timeout(6000),
         });
@@ -192,6 +213,8 @@ export class ExecutorService {
       viewport: { width: 1280, height: 800 },
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      storageState,
+      extraHTTPHeaders: extraHeaders,
     });
     const page = await context.newPage();
 

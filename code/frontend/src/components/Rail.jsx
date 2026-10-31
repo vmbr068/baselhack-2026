@@ -6,52 +6,65 @@ import {
   IconCollapse,
 } from './Icons'
 
-export default function Rail({ activePage, setPage, onNewMcp }) {
+export default function Rail({
+  activePage,
+  setPage,
+  onNewMcp,
+  isExpanded,
+  onToggleExpand,
+  t,
+}) {
   return (
-    <aside className="adobe-rail">
-      {/* Top Red Circle '+' Button */}
+    <aside className={`adobe-rail ${isExpanded ? 'is-expanded' : ''}`}>
+      {/* Top Red '+' Button */}
       <button
-        className="rail-btn-create"
+        className={`rail-btn-create ${isExpanded ? 'expanded' : ''}`}
         onClick={onNewMcp}
-        title="Connecter un nouveau site"
-        aria-label="Connecter un nouveau site"
+        title={t.newMcp}
+        aria-label={t.newMcp}
       >
-        <IconPlus size={22} />
+        <IconPlus size={20} />
+        {isExpanded && <span className="rail-btn-label">{t.newMcp}</span>}
       </button>
 
-      {/* Navigation Icons */}
+      {/* Navigation Items */}
       <nav className="rail-nav">
         {/* Home / Connect View */}
         <button
-          className={`rail-item-btn ${activePage === 'home' ? 'active' : ''}`}
+          className={`rail-item-btn ${activePage === 'home' ? 'active' : ''} ${isExpanded ? 'expanded' : ''}`}
           onClick={() => setPage('home')}
-          title="Accueil / Connecter"
-          aria-label="Accueil"
+          title={t.home}
+          aria-label={t.home}
         >
           <IconHome size={22} />
+          {isExpanded && <span className="rail-item-label">{t.home}</span>}
         </button>
 
         {/* MCP Management View */}
         <button
-          className={`rail-item-btn ${activePage === 'servers' ? 'active' : ''}`}
+          className={`rail-item-btn ${activePage === 'servers' ? 'active' : ''} ${isExpanded ? 'expanded' : ''}`}
           onClick={() => setPage('servers')}
-          title="Gestion des serveurs MCP"
-          aria-label="Serveurs MCP"
+          title={t.myMcps}
+          aria-label={t.myMcps}
         >
           <IconServers size={22} />
+          {isExpanded && <span className="rail-item-label">{t.myMcps}</span>}
         </button>
       </nav>
 
       <div className="rail-spacer" />
 
-      {/* Bottom Drawer / Expand Button */}
+      {/* Bottom Expand / Collapse Button */}
       <button
-        className="rail-btn-bottom"
-        onClick={() => setPage(activePage === 'home' ? 'servers' : 'home')}
-        title={activePage === 'home' ? 'Voir mes serveurs MCP' : 'Retour à la connexion'}
-        aria-label="Changer de vue"
+        className={`rail-btn-bottom ${isExpanded ? 'expanded' : ''}`}
+        onClick={onToggleExpand}
+        title={isExpanded ? t.collapseRail : t.expandRail}
+        aria-label={isExpanded ? t.collapseRail : t.expandRail}
       >
-        <IconCollapse size={20} />
+        <div style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', display: 'flex' }}>
+          <IconCollapse size={20} />
+        </div>
+        {isExpanded && <span className="rail-item-label">{t.collapseRail}</span>}
       </button>
     </aside>
   )

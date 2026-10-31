@@ -17,6 +17,7 @@ export default function DetailDrawer({
   onUpdateServer,
   onCopyEndpoint,
   copiedId,
+  t,
 }) {
   const [busyTool, setBusyTool] = useState(null)
 
@@ -50,14 +51,14 @@ export default function DetailDrawer({
         {/* Drawer Header */}
         <div className="drawer-header">
           <div className="drawer-header-left">
-            <span className="drawer-eyebrow">Connecteur MCP</span>
+            <span className="drawer-eyebrow">{t.drawerEyebrow}</span>
             <h2 className="drawer-title">{server.name}</h2>
           </div>
           <button
             type="button"
             className="header-icon-btn"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t.cancel || 'Close'}
           >
             <IconClose size={20} />
           </button>
@@ -68,7 +69,7 @@ export default function DetailDrawer({
           {/* Endpoint Card for AI Agents */}
           <div className="server-endpoint-card">
             <span className="server-endpoint-label">
-              Endpoint MCP (pour Claude Desktop, Cursor & Agents IA)
+              {t.drawerEndpointLabel}
             </span>
             <div className="server-endpoint-row">
               <span className="server-endpoint-code">{endpointUrl}</span>
@@ -80,19 +81,19 @@ export default function DetailDrawer({
                 {copiedId === server.id ? (
                   <>
                     <IconCheck size={14} />
-                    <span>Copié</span>
+                    <span>{t.drawerCopied}</span>
                   </>
                 ) : (
                   <>
                     <IconCopy size={14} />
-                    <span>Copier</span>
+                    <span>{t.drawerCopy}</span>
                   </>
                 )}
               </button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
               <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                État global du serveur MCP :
+                {t.drawerGlobalState}
               </span>
               <label className="custom-switch">
                 <input
@@ -109,9 +110,9 @@ export default function DetailDrawer({
           <div className="guardrail-card">
             <IconShield size={18} />
             <div>
-              <strong>Sécurité & Contrôle Humain :</strong>
+              <strong>{t.guardrailTitle}</strong>
               <p style={{ marginTop: 2 }}>
-                Toute action irréversible (telle qu'une réservation effective ou un paiement) exige une confirmation explicite de l'utilisateur avant validation.
+                {t.guardrailText}
               </p>
             </div>
           </div>
@@ -119,9 +120,9 @@ export default function DetailDrawer({
           {/* Tools / Routes List */}
           <div>
             <div className="routes-section-title">
-              <span>Routes exposées aux agents</span>
+              <span>{t.drawerRoutesTitle}</span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {activeToolsCount} / {tools.length} actives
+                {t.drawerRoutesRatio(activeToolsCount, tools.length)}
               </span>
             </div>
 
@@ -161,7 +162,7 @@ export default function DetailDrawer({
 
               {tools.length === 0 && (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>
-                  Aucune route configurée pour ce serveur.
+                  {t.drawerNoRoutes}
                 </p>
               )}
             </div>
@@ -170,17 +171,17 @@ export default function DetailDrawer({
           {/* Source & Codebase Enrichment Info */}
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
-              Source d'analyse & enrichissement
+              {t.drawerSourceTitle}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Source actuelle : <strong>{server.source || 'Site Web'}</strong>
+              {t.drawerCurrentSource} <strong>{server.source || 'Website'}</strong>
               {server.codebaseEnrichment ? (
                 <div style={{ marginTop: 4, color: 'var(--green)' }}>
-                  ✓ Codebase enrichie depuis {server.codebaseEnrichment.source}
+                  ✓ {t.drawerEnrichedBadge} {server.codebaseEnrichment.source}
                 </div>
               ) : (
                 <div style={{ marginTop: 4, color: 'var(--text-muted)' }}>
-                  Généré à partir de l'analyse DOM directe du site.
+                  {t.drawerDomBadge}
                 </div>
               )}
             </div>
@@ -196,7 +197,7 @@ export default function DetailDrawer({
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             <IconRefresh size={14} />
-            <span>Actualiser le serveur</span>
+            <span>{t.drawerRefresh}</span>
           </button>
 
           <button
@@ -205,7 +206,7 @@ export default function DetailDrawer({
             style={{ height: 36, fontSize: 12 }}
             onClick={onClose}
           >
-            Terminé
+            {t.drawerDone}
           </button>
         </div>
       </aside>

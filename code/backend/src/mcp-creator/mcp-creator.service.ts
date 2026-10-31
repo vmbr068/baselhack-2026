@@ -171,6 +171,11 @@ export class McpCreatorService implements OnModuleInit {
     const scanResult = await this.scanner.scanWebsite(url, authSession);
     const config = this.synthesizer.synthesizeMCPServer(scanResult);
 
+    if (scanResult.screenshotPath) {
+      config.scanSummary.screenshotPath = scanResult.screenshotPath;
+      config.scanSummary.screenshot_url = `/static/screenshots/${scanResult.screenshotPath}`;
+    }
+
     if (authSession) {
       config.authSession =
         typeof authSession === 'string' ? JSON.parse(authSession) : authSession;
@@ -183,6 +188,9 @@ export class McpCreatorService implements OnModuleInit {
       hotel_name: config.hotelName,
       target_url: config.targetUrl,
       tools: config.tools,
+      screenshot_url: scanResult.screenshotPath
+        ? `/static/screenshots/${scanResult.screenshotPath}`
+        : null,
       call_endpoint: `/api/v1/servers/${config.serverId}/call`,
       has_auth_session: Boolean(config.authSession),
       mcp_schema: {

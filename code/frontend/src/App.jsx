@@ -5,6 +5,7 @@ import ConnectView from './components/ConnectView'
 import McpManagementView from './components/McpManagementView'
 import DetailDrawer from './components/DetailDrawer'
 import { IconCheck } from './components/Icons'
+import { translations } from './translations'
 import {
   listMcpServers,
   getMcpServer,
@@ -78,6 +79,13 @@ function normalizeServer(server) {
     .join('')
     .toUpperCase()
 
+  const screenshot =
+    server.screenshot_url ||
+    server.screenshotUrl ||
+    (server.scanSummary?.screenshotPath
+      ? `/static/screenshots/${server.scanSummary.screenshotPath}`
+      : null)
+
   return {
     ...server,
     id: server.serverId || server.server_id || server.id,
@@ -89,6 +97,8 @@ function normalizeServer(server) {
     routes: tools.length,
     initials: initials || 'MC',
     tools,
+    screenshot_url: screenshot,
+    screenshotUrl: screenshot,
   }
 }
 
@@ -99,6 +109,14 @@ export default function App() {
     if (saved) return saved
     return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
   })
+
+  // Language state (default 'en' as requested, with 'fr' support)
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem('adobe-lang') || 'en'
+  })
+
+  // Rail expansion state (expand/collapse sidebar to see page titles)
+  const [railExpanded, setRailExpanded] = useState(false)
 
   const [servers, setServers] = useState(defaultSampleServers)
   const [selected, setSelected] = useState(null)
@@ -111,8 +129,11 @@ export default function App() {
   const [copiedId, setCopiedId] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [notifications, setNotifications] = useState([
-    { title: 'Serveur Grand Hôtel Basel prêt pour les agents IA', time: 'Il y a 5 min' },
+    { title: 'Grand Hôtel Basel MCP server ready for AI agents', time: '5m ago' },
   ])
+
+  // Active translation dictionary
+  const t = translations[language] || translations.en
 
   // Sync theme with localStorage and body background
   useEffect(() => {
@@ -120,6 +141,11 @@ export default function App() {
     document.documentElement.className = `theme-${colorScheme}`
     document.body.className = `theme-${colorScheme}`
   }, [colorScheme])
+
+  // Sync language with localStorage
+  useEffect(() => {
+    localStorage.setItem('adobe-lang', language)
+  }, [language])
 
   // Load user if token exists
   useEffect(() => {
@@ -216,13 +242,13 @@ export default function App() {
         ...current.filter((item) => item.id !== normalized.id),
       ])
       setNotifications((prev) => [
-        { title: `MCP créé pour ${normalized.name}`, time: 'À l’instant' },
+        { title: `MCP created for ${normalized.name}`, time: 'Just now' },
         ...prev,
       ])
       setStage('result')
-      showToast('Serveur MCP créé avec succès')
+      showToast(t.toastServerCreated)
     } catch (err) {
-      setError(err.message || "Erreur lors de l'analyse du site web.")
+      setError(err.message || "Error analyzing website.")
       setStage('idle')
     } finally {
       setBusy(false)
@@ -247,9 +273,9 @@ export default function App() {
       setServers((current) =>
         current.map((s) => (s.id === serverId ? updated : s))
       )
-      showToast(`MCP enrichi depuis ${source} !`)
+      showToast(t.toastEnrichSuccess(source))
     } catch (err) {
-      setError(err.message || "Échec de l'enrichissement.")
+      setError(err.message || "Enrichment failed.")
     } finally {
       setBusy(false)
     }
@@ -267,7 +293,7 @@ export default function App() {
       if (selected?.id === server.id) {
         setSelected(updated)
       }
-      showToast(`Serveur ${enabled ? 'activé' : 'désactivé'}`)
+      showToast(t.toastServerState(enabled))
     } catch {
       // Local fallback toggle
       const updated = { ...server, enabled }
@@ -277,7 +303,7 @@ export default function App() {
       if (selected?.id === server.id) {
         setSelected(updated)
       }
-      showToast(`Serveur ${enabled ? 'activé' : 'désactivé'}`)
+      showToast(t.toastServerState(enabled))
     }
   }
 
@@ -311,7 +337,7 @@ export default function App() {
     )}`
     navigator.clipboard?.writeText(endpoint)
     setCopiedId(server.id)
-    showToast(`Endpoint MCP copié pour ${server.name} !`)
+    showToast(t.toastCopied(server.name))
     window.setTimeout(() => setCopiedId(null), 2000)
   }
 
@@ -323,9 +349,9 @@ export default function App() {
         current.map((item) => (item.id === server.id ? refreshed : item))
       )
       setSelected(refreshed)
-      showToast('Serveur actualisé')
+      showToast(t.toastServerUpdated)
     } catch (err) {
-      showToast('Données à jour')
+      showToast(t.toastServerDataCurrent)
     }
   }
 
@@ -335,8 +361,11 @@ export default function App() {
       <Header
         colorScheme={colorScheme}
         setColorScheme={setColorScheme}
+        language={language}
+        setLanguage={setLanguage}
         onNavigateHome={() => setPage('home')}
         notifications={notifications}
+        t={t}
       />
 
       {/* 2. BODY: LEFT RAIL + GIANT FLOATING CARD CANVAS */}
@@ -346,6 +375,9 @@ export default function App() {
           activePage={page}
           setPage={setPage}
           onNewMcp={handleNewMcp}
+          isExpanded={railExpanded}
+          onToggleExpand={() => setRailExpanded((prev) => !prev)}
+          t={t}
         />
 
         {/* 3. The Giant Floating Card Container (Adobe Canvas) */}
@@ -365,6 +397,7 @@ export default function App() {
                 }}
                 onGoToManagement={() => setPage('servers')}
                 onEnrich={handleEnrich}
+                t={t}
               />
             )}
 
@@ -376,13 +409,14 @@ export default function App() {
                 onNewMcp={handleNewMcp}
                 onCopyEndpoint={handleCopyEndpoint}
                 copiedId={copiedId}
+                t={t}
               />
             )}
           </div>
         </main>
       </div>
 
-      {/* Detail Drawer (When clicking "Gérer les routes") */}
+      {/* Detail Drawer (When clicking "Manage routes" / "Gérer les routes") */}
       {selected && (
         <DetailDrawer
           server={selected}
@@ -392,6 +426,7 @@ export default function App() {
           onUpdateServer={handleUpdateServer}
           onCopyEndpoint={handleCopyEndpoint}
           copiedId={copiedId}
+          t={t}
         />
       )}
 

@@ -6,9 +6,114 @@ import {
   IconCopy,
   IconCheck,
   IconLightning,
-  IconGlobe,
   IconServers,
 } from './Icons'
+
+// Multi-tiered website preview component (Backend screenshot -> Thum.io CDN -> Microlink -> Rich Adobe fallback)
+function WebsiteCardPreview({ server, hostname, isLocal }) {
+  const [imageState, setImageState] = useState('loading') // 'loading' | 'loaded' | 'error'
+  const [attempt, setAttempt] = useState(0)
+
+  const previewCandidates = useMemo(() => {
+    const urls = []
+
+    // 1. Direct backend screenshot if generated
+    if (server.screenshot_url) urls.push(server.screenshot_url)
+    if (server.screenshotUrl && !urls.includes(server.screenshotUrl)) urls.push(server.screenshotUrl)
+    if (server.scanSummary?.screenshotPath) {
+      const p = server.scanSummary.screenshotPath.startsWith('/')
+        ? server.scanSummary.screenshotPath
+        : `/static/screenshots/${server.scanSummary.screenshotPath}`
+      if (!urls.includes(p)) urls.push(p)
+    }
+
+    // 2. High-speed CDN website thumbnails for remote websites
+    if (!isLocal && server.url && (server.url.startsWith('http://') || server.url.startsWith('https://'))) {
+      urls.push(`https://image.thum.io/get/width/700/crop/450/noanimate/${encodeURIComponent(server.url)}`)
+      urls.push(`https://api.microlink.io/?url=${encodeURIComponent(server.url)}&screenshot=true&meta=false&embed=screenshot.url`)
+    }
+
+    return urls
+  }, [server.url, server.screenshot_url, server.screenshotUrl, server.scanSummary?.screenshotPath, isLocal])
+
+  const currentSrc = previewCandidates[attempt] || null
+
+  const handleImageError = () => {
+    if (attempt + 1 < previewCandidates.length) {
+      setAttempt((prev) => prev + 1)
+    } else {
+      setImageState('error')
+    }
+  }
+
+  const handleImageLoad = () => {
+    setImageState('loaded')
+  }
+
+  const faviconUrl = hostname
+    ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`
+    : ''
+
+  return (
+    <div className="mcp-preview-box">
+      <div className="preview-browser-bar">
+        <div className="preview-browser-dots">
+          <span className="preview-dot dot-red" />
+          <span className="preview-dot dot-yellow" />
+          <span className="preview-dot dot-green" />
+        </div>
+        <div className="preview-url-pill">
+          <span className="preview-lock-icon">🔒</span>
+          <span className="preview-url-tag">{hostname || server.name}</span>
+        </div>
+      </div>
+
+      <div className="preview-viewport">
+        {currentSrc && imageState !== 'error' && (
+          <img
+            src={currentSrc}
+            alt={server.name}
+            className={`preview-thumbnail-img ${imageState === 'loaded' ? 'visible' : 'hidden'}`}
+            loading="lazy"
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+          />
+        )}
+
+        {currentSrc && imageState === 'loading' && (
+          <div className="preview-skeleton-loader">
+            <div className="skeleton-pulse" />
+          </div>
+        )}
+
+        {(!currentSrc || imageState === 'error') && (
+          <div className="preview-fallback-banner">
+            <div className="preview-fallback-gradient" />
+            <div className="preview-fallback-content">
+              <div className="preview-site-icon">
+                {faviconUrl ? (
+                  <img
+                    src={faviconUrl}
+                    alt=""
+                    style={{ width: 26, height: 26, borderRadius: 5 }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                ) : null}
+                <span className="preview-initials">{server.initials || 'MC'}</span>
+              </div>
+              <div className="preview-site-meta">
+                <strong className="preview-meta-title">{server.name}</strong>
+                <span className="preview-meta-url">{server.url}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function McpManagementView({
   servers,
@@ -17,6 +122,7 @@ export default function McpManagementView({
   onNewMcp,
   onCopyEndpoint,
   copiedId,
+  t,
 }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'disabled'
@@ -43,11 +149,9 @@ export default function McpManagementView({
       {/* Header Toolbar */}
       <div className="management-header">
         <div className="management-title-group">
-          <span className="management-eyebrow">Connecteurs IA</span>
-          <h1 className="management-title">Mes serveurs MCP</h1>
-          <p className="management-subtitle">
-            Gérez vos sites connectés, activez leurs routes et exposez-les aux agents (Claude, Cursor, etc.).
-          </p>
+          <span className="management-eyebrow">{t.managementEyebrow}</span>
+          <h1 className="management-title">{t.managementTitle}</h1>
+          <p className="management-subtitle">{t.managementSubtitle}</p>
         </div>
 
         <div className="management-controls">
@@ -57,7 +161,7 @@ export default function McpManagementView({
             <input
               type="text"
               className="mcp-search-input"
-              placeholder="Rechercher un MCP…"
+              placeholder={t.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -70,28 +174,28 @@ export default function McpManagementView({
               className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
               onClick={() => setStatusFilter('all')}
             >
-              Tous ({servers.length})
+              {t.filterAll} ({servers.length})
             </button>
             <button
               type="button"
               className={`filter-pill ${statusFilter === 'active' ? 'active' : ''}`}
               onClick={() => setStatusFilter('active')}
             >
-              Actifs ({servers.filter((s) => s.enabled !== false).length})
+              {t.filterActive} ({servers.filter((s) => s.enabled !== false).length})
             </button>
             <button
               type="button"
               className={`filter-pill ${statusFilter === 'disabled' ? 'active' : ''}`}
               onClick={() => setStatusFilter('disabled')}
             >
-              Désactivés ({servers.filter((s) => s.enabled === false).length})
+              {t.filterDisabled} ({servers.filter((s) => s.enabled === false).length})
             </button>
           </div>
 
           {/* New MCP Button */}
           <button type="button" className="management-add-btn" onClick={onNewMcp}>
             <IconPlus size={16} />
-            <span>Connecter un site</span>
+            <span>{t.connectSiteBtn}</span>
           </button>
         </div>
       </div>
@@ -113,58 +217,17 @@ export default function McpManagementView({
             (t) => t.enabled !== false
           ).length
 
-          const faviconUrl = hostname
-            ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`
-            : ''
-          const screenshot =
-            server.screenshot_url ||
-            server.screenshotUrl ||
-            server.scanSummary?.screenshotPath
-
           return (
             <div
               key={server.id}
               className={`mcp-card ${server.enabled === false ? 'disabled' : ''}`}
             >
               {/* Site Preview Thumbnail Header */}
-              <div className="mcp-preview-box">
-                <div className="preview-browser-bar">
-                  <span className="preview-dot" />
-                  <span className="preview-dot" />
-                  <span className="preview-dot" />
-                  <span className="preview-url-tag">{hostname || server.name}</span>
-                </div>
-
-                <div className="preview-iframe-wrapper">
-                  {screenshot ? (
-                    <img
-                      src={screenshot}
-                      alt={server.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div className="preview-fallback-banner">
-                      <div className="preview-site-icon">
-                        {faviconUrl ? (
-                          <img
-                            src={faviconUrl}
-                            alt=""
-                            style={{ width: 26, height: 26, borderRadius: 4 }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : null}
-                        <span>{server.initials || 'MC'}</span>
-                      </div>
-                      <div className="preview-site-meta">
-                        <strong>{server.name}</strong>
-                        <span>{server.url}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <WebsiteCardPreview
+                server={server}
+                hostname={hostname}
+                isLocal={isLocal}
+              />
 
               {/* Card Body */}
               <div className="mcp-card-body">
@@ -187,7 +250,7 @@ export default function McpManagementView({
                   {/* Switch to enable/disable server */}
                   <label
                     className="custom-switch"
-                    title={server.enabled !== false ? 'Désactiver le MCP' : 'Activer le MCP'}
+                    title={server.enabled !== false ? t.statusDisabled : t.statusActive}
                   >
                     <input
                       type="checkbox"
@@ -206,7 +269,7 @@ export default function McpManagementView({
                     }`}
                   >
                     <span className="status-dot-pulse" />
-                    <span>{server.enabled !== false ? 'Actif' : 'Désactivé'}</span>
+                    <span>{server.enabled !== false ? t.statusActive : t.statusDisabled}</span>
                   </span>
 
                   <span
@@ -219,15 +282,15 @@ export default function McpManagementView({
                     }`}
                   >
                     {server.source === 'GitHub'
-                      ? '🐙 GitHub'
+                      ? `🐙 ${t.sourceGithub}`
                       : server.source === 'WordPress'
-                      ? '🌐 WordPress'
-                      : '🔗 Site Web'}
+                      ? `🌐 ${t.sourceWordpress}`
+                      : `🔗 ${t.sourceWebsite}`}
                   </span>
 
                   <span className="routes-metric-badge">
                     <IconLightning size={13} />
-                    <span>{activeRoutesCount} routes</span>
+                    <span>{t.routesMetric(activeRoutesCount)}</span>
                   </span>
                 </div>
 
@@ -238,7 +301,7 @@ export default function McpManagementView({
                     className="btn-manage-routes"
                     onClick={() => onSelectServer(server)}
                   >
-                    <span>Gérer les routes</span>
+                    <span>{t.manageRoutes}</span>
                     <IconExternalLink size={13} />
                   </button>
 
@@ -246,8 +309,8 @@ export default function McpManagementView({
                     type="button"
                     className="btn-copy-endpoint"
                     onClick={() => onCopyEndpoint(server)}
-                    title="Copier le endpoint MCP pour Claude / agents IA"
-                    aria-label="Copier le endpoint MCP"
+                    title={t.copyEndpoint}
+                    aria-label={t.copyEndpoint}
                   >
                     {copiedId === server.id ? (
                       <IconCheck size={16} />
@@ -268,12 +331,12 @@ export default function McpManagementView({
               <IconServers size={32} />
             </div>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
-              Aucun serveur MCP trouvé
+              {t.emptyTitle}
             </h3>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 360 }}>
               {search
-                ? `Aucun résultat ne correspond à votre recherche "${search}".`
-                : 'Vous n’avez pas encore connecté de site web. Commencez par en analyser un !'}
+                ? t.emptySearch(search)
+                : t.emptyNoServers}
             </p>
             <button
               type="button"
@@ -282,7 +345,7 @@ export default function McpManagementView({
               onClick={onNewMcp}
             >
               <IconPlus size={16} />
-              <span>Connecter un premier site</span>
+              <span>{t.connectFirstSite}</span>
             </button>
           </div>
         )}

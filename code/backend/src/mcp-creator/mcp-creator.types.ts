@@ -29,6 +29,29 @@ export interface WebScanResult {
   buttons: ActionButton[];
   detectedRooms: ScannedRoomOption[];
   screenshotPath?: string;
+  authenticated?: boolean;
+}
+
+export interface CookieItem {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  expires?: number;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+}
+
+export interface OriginStorageItem {
+  origin: string;
+  localStorage: Array<{ name: string; value: string }>;
+}
+
+export interface AuthSessionData {
+  cookies?: CookieItem[];
+  origins?: OriginStorageItem[];
+  extraHeaders?: Record<string, string>;
 }
 
 export interface MCPToolDefinition {
@@ -41,6 +64,8 @@ export interface MCPToolDefinition {
   apiEndpoint?: string;
   apiMethod?: 'GET' | 'POST' | 'PUT';
   sourceOrigin?: 'dom' | 'wordpress' | 'github';
+  requires_confirmation?: boolean;
+  is_irreversible?: boolean;
 }
 
 export interface MCPServerConfig {
@@ -50,6 +75,7 @@ export interface MCPServerConfig {
   createdAt: string;
   tools: MCPToolDefinition[];
   scanSummary: Record<string, any>;
+  authSession?: AuthSessionData;
   codebaseEnrichment?: {
     source: 'wordpress' | 'github';
     details: Record<string, any>;
@@ -57,14 +83,29 @@ export interface MCPServerConfig {
   };
 }
 
+export interface ConfirmationDetails {
+  token: string;
+  summary: string;
+  hotel: string;
+  action: string;
+  details: Record<string, any>;
+  expires_at: string;
+}
+
 export interface ToolCallRequest {
   tool_name: string;
   arguments?: Record<string, any>;
+  confirmed_by_human?: boolean;
+  confirmation_token?: string;
+  auth_session?: AuthSessionData | string;
 }
 
 export interface ToolCallResponse {
   tool_name: string;
   success: boolean;
+  status?: 'executed' | 'pending_confirmation' | 'rejected';
+  confirmation_required?: boolean;
+  confirmation_details?: ConfirmationDetails;
   data: Record<string, any>;
   screenshot_url?: string | null;
   error?: string | null;
@@ -77,6 +118,7 @@ export interface GenerateResponse {
   target_url: string;
   tools: MCPToolDefinition[];
   call_endpoint: string;
+  has_auth_session?: boolean;
   mcp_schema: {
     name: string;
     server_id: string;

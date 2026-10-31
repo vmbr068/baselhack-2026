@@ -12,3 +12,4 @@ generated_servers/*.json
 !generated_servers/.gitkeep
 exchange_store/*.json
 !exchange_store/.gitkeep
+audit_logs/

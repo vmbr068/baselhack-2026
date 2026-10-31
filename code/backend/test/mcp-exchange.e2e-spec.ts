@@ -86,7 +86,10 @@ describe('McpExchangeController (e2e)', () => {
     const entryFiles = files.filter((f) => f.endsWith('.json'));
     expect(entryFiles.length).toBe(1);
 
-    const raw = await fs.readFile(path.join(exchangeDir, entryFiles[0]), 'utf-8');
+    const raw = await fs.readFile(
+      path.join(exchangeDir, entryFiles[0]),
+      'utf-8',
+    );
     const entry = JSON.parse(raw);
     expect(entry.sourceUrl).toBe(mockHotelFileUrl);
     expect(entry.versions.length).toBe(2);

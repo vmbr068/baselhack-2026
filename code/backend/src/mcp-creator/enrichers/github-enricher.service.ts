@@ -284,14 +284,16 @@ export class GithubEnricherService {
           parameters = op.requestBody.content['application/json'].schema;
         }
 
+        const isBooking =
+          lowerPath.includes('book') || lowerPath.includes('reserve');
+
         tools.push({
           name: toolName,
           description,
           parameters,
-          executionStep:
-            lowerPath.includes('book') || lowerPath.includes('reserve')
-              ? 'reserve_room'
-              : 'check_availability',
+          executionStep: isBooking ? 'reserve_room' : 'check_availability',
+          requires_confirmation: isBooking,
+          is_irreversible: isBooking,
           selectorsMapping: {},
           executionMode: 'hybrid',
           apiEndpoint: `${baseUrl.replace(/\/+$/, '')}${pathStr}`,

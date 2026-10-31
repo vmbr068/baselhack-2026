@@ -1,5 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class InteractiveLoginDto {
+  @ApiProperty({
+    description: 'Target website URL to open for user login',
+    example: 'http://localhost:3000/mock-hotel/vip',
+  })
+  url!: string;
+
+  @ApiPropertyOptional({
+    description: 'Timeout in milliseconds to wait for the user to authenticate',
+    example: 60000,
+    default: 60000,
+  })
+  timeoutMs?: number;
+}
+
 export class GenerateRequestDto {
   @ApiProperty({
     description:
@@ -7,6 +22,21 @@ export class GenerateRequestDto {
     example: 'http://localhost:3000/mock-hotel',
   })
   url!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional delegated session data (cookies, storageState or headers) for scanning authenticated member areas',
+    example: {
+      cookies: [
+        {
+          name: 'session_id',
+          value: 'vip_session_token_123',
+          domain: 'localhost',
+        },
+      ],
+    },
+  })
+  auth_session?: any;
 }
 
 export class ScanRequestDto {
@@ -15,6 +45,21 @@ export class ScanRequestDto {
     example: 'http://localhost:3000/mock-hotel',
   })
   url!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional delegated session data (cookies, storageState or headers) for scanning authenticated member areas',
+    example: {
+      cookies: [
+        {
+          name: 'session_id',
+          value: 'vip_session_token_123',
+          domain: 'localhost',
+        },
+      ],
+    },
+  })
+  auth_session?: any;
 }
 
 export class ToolCallRequestDto {
@@ -34,6 +79,27 @@ export class ToolCallRequestDto {
     },
   })
   arguments?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description:
+      'Explicit human confirmation flag required before executing irreversible tools (e.g. reserve_room)',
+    example: true,
+    default: false,
+  })
+  confirmed_by_human?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Unique confirmation token issued by the pending confirmation request',
+    example: 'conf_tok_1710000000000_abc123',
+  })
+  confirmation_token?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional delegated session data (cookies or headers) to override authentication for this execution',
+  })
+  auth_session?: any;
 }
 
 export class EnrichWordpressDto {

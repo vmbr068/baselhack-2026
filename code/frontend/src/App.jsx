@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enrichMcpWithGithub, enrichMcpWithWordpress, generateMcp, generateMcpInteractive, getMcpServer, listMcpServers } from './api'
+import {
+  enrichMcpWithGithub,
+  enrichMcpWithWordpress,
+  generateMcp,
+  generateMcpInteractive,
+  getMcpServer,
+  listMcpServers,
+  loginBusinessOwner,
+  registerBusinessOwner,
+  getCurrentUser,
+  logoutBusinessOwner,
+  setAuthToken,
+  getAuthToken,
+} from './api'
 import MagicWand from '@react-spectrum/s2/icons/MagicWand'
 import Add from '@react-spectrum/s2/icons/Add'
 import ChartTrend from '@react-spectrum/s2/icons/ChartTrend'
@@ -51,6 +64,7 @@ const translations = {
     tableProject: 'PROJET', tableSource: 'SOURCE', tableStatus: 'ÉTAT', tableRoutes: 'ROUTES', tableUpdated: 'MISE À JOUR', mcpCount: count => `${count} MCP${count > 1 ? 's' : ''} dans votre espace`, localData: 'Données locales d’exemple', detailEyebrow: 'DÉTAILS DU MCP', activeRoutes: 'ROUTES ACTIVES', lastUpdate: 'DERNIÈRE MISE À JOUR', routeSectionDescription: 'Choisissez les routes exposées à vos agents.', routeDescriptions: ['Lister les produits disponibles', 'Consulter un produit', 'Ajouter un article au panier', 'Consulter les commandes'], safetyConfirm: 'Les réservations et paiements exigent une confirmation humaine.',
     activityDescription: 'Suivez les créations et enrichissements de vos MCP.', activityFilterAll: 'Tout', activityFilterAction: 'Action requise', activityFilterChanges: 'Modifications', activitySearch: 'Rechercher dans l’activité…', activityEmpty: 'Aucun événement ne correspond à ces filtres.', today: 'Aujourd’hui', yesterday: 'Hier', earlier: 'Plus tôt', viewMcp: 'Voir le MCP', activitySample: 'Événements du backend', eventMcpEnriched: 'MCP enrichi', eventMcpEnrichedDescription: 'Les outils ont été enrichis depuis la source de code.', eventMcpCreated: 'MCP créé', eventMcpCreatedDescription: 'Le MCP de base a été généré depuis l’URL du site.', syncFailureTitle: 'Synchronisation en échec', reconnect: 'Reconnecter WordPress', reconnectBackend: 'La reconnexion sera disponible avec le backend.',
     authArtTag: 'ESPACE DE TRAVAIL MCPEX', authArtTitle: <>Connectez vos outils.<br />Libérez vos agents.</>, authArtDescription: 'Une passerelle sécurisée entre votre site web et les outils d’IA de votre équipe.', authTagLogin: 'VOTRE ESPACE DE TRAVAIL', authTagSignup: 'PREMIERS PAS', forgot: 'Mot de passe oublié ?', google: 'Continuer avec Google', legal: <>En continuant, vous acceptez nos <a href="#terms">Conditions d’utilisation</a> et notre <a href="#privacy">Politique de confidentialité</a>.</>, privacy: 'Confidentialité', support: 'Assistance',
+    businessOwnerSpace: 'Espace Propriétaire', notSignedIn: 'Non connecté', quickDemoLogin: 'Comptes démo pour le pitch', companyLabel: 'Établissement / Entreprise', companyPlaceholder: 'ex. Grand Hotel Basel', authSuccess: 'Connecté avec succès', authLoggedOut: 'Vous êtes déconnecté',
   },
   en: {
     home: 'Home', servers: 'My MCPs', activity: 'Activity', settings: 'Settings', help: 'Need help?', logout: 'Sign out', loading: 'Loading…',
@@ -68,7 +82,9 @@ const translations = {
     tableProject: 'PROJECT', tableSource: 'SOURCE', tableStatus: 'STATUS', tableRoutes: 'ROUTES', tableUpdated: 'UPDATED', mcpCount: count => `${count} MCP${count === 1 ? '' : 's'} in your workspace`, localData: 'Local sample data', detailEyebrow: 'MCP DETAILS', activeRoutes: 'ACTIVE ROUTES', lastUpdate: 'LAST UPDATED', routeSectionDescription: 'Choose which routes your agents can access.', routeDescriptions: ['List available products', 'View a product', 'Add an item to the cart', 'View orders'], safetyConfirm: 'Bookings and payments require human confirmation.',
     activityDescription: 'Track MCP creation and enrichment.', activityFilterAll: 'All', activityFilterAction: 'Action required', activityFilterChanges: 'Changes', activitySearch: 'Search activity…', activityEmpty: 'No events match these filters.', today: 'Today', yesterday: 'Yesterday', earlier: 'Earlier', viewMcp: 'View MCP', activitySample: 'Backend events', eventMcpEnriched: 'MCP enriched', eventMcpEnrichedDescription: 'Tools were enriched from the code source.', eventMcpCreated: 'MCP created', eventMcpCreatedDescription: 'A base MCP was generated from the website URL.', syncFailureTitle: 'Sync failed', reconnect: 'Reconnect WordPress', reconnectBackend: 'Reconnection will be available when the backend is connected.',
     authArtTag: 'MCPEX / WORKSPACE', authArtTitle: <>Connect your tools.<br />Unlock your agents.</>, authArtDescription: 'One secure bridge between your website and the AI tools your team uses every day.', authTagLogin: 'YOUR WORKSPACE', authTagSignup: 'GET STARTED', forgot: 'Forgot password?', google: 'Continue with Google', legal: <>By continuing, you agree to our <a href="#terms">Terms of Use</a> and <a href="#privacy">Privacy Policy</a>.</>, privacy: 'Privacy', support: 'Support',
+    businessOwnerSpace: 'Business Owner', notSignedIn: 'Not signed in', quickDemoLogin: 'Demo accounts for pitch', companyLabel: 'Property / Business name', companyPlaceholder: 'e.g. Grand Hotel Basel', authSuccess: 'Signed in successfully', authLoggedOut: 'You have been signed out',
   },
+
 }
 
 const spectrumIcons = {
@@ -121,7 +137,11 @@ function ServerCard({ server, t, language, onSelect }) {
   </button>
 }
 
-function Sidebar({ page, setPage, t, onNew, language, setLanguage, onAuth, servers }) {
+function Sidebar({ page, setPage, t, onNew, language, setLanguage, onAuth, onLogout, currentUser, servers }) {
+  const initials = currentUser?.fullName
+    ? currentUser.fullName.split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase()
+    : 'BO'
+
   return <aside className="sidebar">
     <div className="sidebar-top"><Wordmark /><button className="icon-button mobile-close" aria-label="Fermer le menu" onClick={() => setPage('home')}><Icon name="close" /></button></div>
     <button className="new-button" onClick={onNew}><Icon name="plus" size={18} /><span>{t.newMcp}</span><span className="shortcut">⌘ K</span></button>
@@ -136,14 +156,45 @@ function Sidebar({ page, setPage, t, onNew, language, setLanguage, onAuth, serve
       <button className="nav-item" onClick={() => setPage('settings')}><Icon name="settings" /><span>{t.settings}</span></button>
       <button className="nav-item help-item"><Icon name="help" /><span>{t.help}</span><Icon name="external" size={15} /></button>
       <div className="sidebar-divider" />
-      <div className="account-card">
-        <span className="account-avatar">AL</span><span className="account-copy"><strong>Alex Laurent</strong><span>alex@atelier-studio.ch</span></span>
-        <button className="icon-button account-menu" aria-label={t.account} onClick={() => onAuth('login')}><Icon name="chevron" size={17} /></button>
-      </div>
+      {currentUser ? (
+        <div className="account-card">
+          <span className="account-avatar">{initials}</span>
+          <span className="account-copy">
+            <strong>{currentUser.fullName}</strong>
+            <span>{currentUser.company || currentUser.email}</span>
+          </span>
+          <button
+            className="icon-button"
+            aria-label={t.logout}
+            title={t.logout}
+            onClick={onLogout}
+          >
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      ) : (
+        <div className="account-card unauthenticated">
+          <span className="account-avatar" style={{ background: '#f0f0f3', color: '#666' }}>
+            <Icon name="lock" size={15} />
+          </span>
+          <span className="account-copy">
+            <strong>{t.businessOwnerSpace}</strong>
+            <span>{t.notSignedIn}</span>
+          </span>
+          <button
+            className="quiet-button compact"
+            style={{ fontWeight: 600, color: 'var(--blue)' }}
+            onClick={() => onAuth('login')}
+          >
+            {t.login}
+          </button>
+        </div>
+      )}
       <button className="language-switch" onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}><Icon name="globe" size={16} /><span>{t.language}</span><strong>{language.toUpperCase()}</strong></button>
     </div>
   </aside>
 }
+
 
 function Home({ t, language, servers, onSelect, onViewAll, onAnalyze, stage, analyzedUrl, setStage, generated, needsEnrichment, busy, error, onEnrich }) {
   const [url, setUrl] = useState('')
@@ -258,8 +309,136 @@ function ActivityPage({ t, language, servers, onSelect }) {
 
 function AuthPage({ mode, setMode, t, language, setLanguage, onComplete }) {
   const signup = mode === 'signup'
-  function submit(event) { event.preventDefault(); onComplete() }
-  return <main className="auth-shell"><div className="auth-top"><Wordmark /><div className="auth-actions"><button className="quiet-button language-auth" onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}><Icon name="globe" size={15} />{language.toUpperCase()}</button><button className="quiet-button" onClick={() => setMode(signup ? 'login' : 'signup')}>{signup ? t.hasAccount : t.noAccount}<strong>{signup ? t.login : t.signup}</strong></button></div></div><div className="auth-content"><div className="auth-art"><div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" /><div className="art-core"><Icon name="spark" size={36} /></div><span className="art-node node-one"><Icon name="globe" /></span><span className="art-node node-two"><Icon name="cube" /></span><span className="art-node node-three"><Icon name="check" /></span><div className="art-caption"><span>{t.authArtTag}</span><strong>{t.authArtTitle}</strong><p>{t.authArtDescription}</p></div></div><section className="auth-form-side"><p className="eyebrow">{signup ? t.authTagSignup : t.authTagLogin}</p><h1>{signup ? t.createAccount : t.welcomeBack}</h1><p>{signup ? t.signupSub : t.loginSub}</p><form onSubmit={submit}>{signup && <label>{t.fullName}<input autoComplete="name" placeholder="Alex Laurent" required /></label>}<label>{t.email}<input type="email" autoComplete="email" placeholder={language === 'fr' ? 'vous@entreprise.com' : 'you@company.com'} required /></label><label>{t.password}<input type="password" autoComplete={signup ? 'new-password' : 'current-password'} placeholder="••••••••••" minLength="8" required /></label>{!signup && <button type="button" className="forgot-link">{t.forgot}</button>}<button className="primary-button auth-submit" type="submit">{signup ? t.signup : t.login}<Icon name="arrow" size={16} /></button></form><div className="auth-separator"><span />{t.or}<span /></div><button className="sso-button" onClick={onComplete}><span className="google-mark">G</span> {t.google}</button><div className="auth-legal">{t.legal}</div></section></div><footer className="auth-footer"><span>© 2026 MCPEX</span><button>{t.privacy}</button><button>{t.support}</button><span className="auth-foot-spacer" /><span>{language.toUpperCase()} · CH</span></footer></main>
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [company, setCompany] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleAuth(event) {
+    if (event) event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      if (signup) {
+        const res = await registerBusinessOwner({ email, password, fullName, company })
+        setAuthToken(res.token)
+        onComplete(res.user)
+      } else {
+        const res = await loginBusinessOwner(email, password)
+        setAuthToken(res.token)
+        onComplete(res.user)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function useDemoAccount(demoEmail, demoPassword) {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    setError('')
+    setBusy(true)
+    loginBusinessOwner(demoEmail, demoPassword)
+      .then(res => {
+        setAuthToken(res.token)
+        onComplete(res.user)
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setBusy(false))
+  }
+
+  return <main className="auth-shell">
+    <div className="auth-top">
+      <Wordmark />
+      <div className="auth-actions">
+        <button className="quiet-button language-auth" onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}>
+          <Icon name="globe" size={15} />{language.toUpperCase()}
+        </button>
+        <button className="quiet-button" onClick={() => { setMode(signup ? 'login' : 'signup'); setError('') }}>
+          {signup ? t.hasAccount : t.noAccount}
+          <strong>{signup ? t.login : t.signup}</strong>
+        </button>
+      </div>
+    </div>
+    <div className="auth-content">
+      <div className="auth-art">
+        <div className="art-orbit orbit-one" />
+        <div className="art-orbit orbit-two" />
+        <div className="art-core"><Icon name="spark" size={36} /></div>
+        <span className="art-node node-one"><Icon name="globe" /></span>
+        <span className="art-node node-two"><Icon name="cube" /></span>
+        <span className="art-node node-three"><Icon name="check" /></span>
+        <div className="art-caption">
+          <span>{t.authArtTag}</span>
+          <strong>{t.authArtTitle}</strong>
+          <p>{t.authArtDescription}</p>
+        </div>
+      </div>
+      <section className="auth-form-side">
+        <p className="eyebrow">{signup ? t.authTagSignup : t.authTagLogin}</p>
+        <h1>{signup ? t.createAccount : t.welcomeBack}</h1>
+        <p>{signup ? t.signupSub : t.loginSub}</p>
+
+        {!signup && (
+          <div style={{ marginBottom: '16px', padding: '10px 12px', background: '#f8f8fa', border: '1px solid #e7e7eb', borderRadius: '8px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: '#666', marginBottom: '6px' }}>
+              ⚡ {t.quickDemoLogin}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <button
+                type="button"
+                className="quiet-button compact"
+                style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '5px 8px', background: '#fff', border: '1px solid #d5d5db', borderRadius: '5px', fontSize: '10px' }}
+                onClick={() => useDemoAccount('owner@hotelbasel.ch', 'basel2026')}
+              >
+                🏨 <strong>Beatrix Meier</strong> — Grand Hotel Basel
+              </button>
+              <button
+                type="button"
+                className="quiet-button compact"
+                style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '5px 8px', background: '#fff', border: '1px solid #d5d5db', borderRadius: '5px', fontSize: '10px' }}
+                onClick={() => useDemoAccount('alex@atelier-studio.ch', 'demo1234')}
+              >
+                🎨 <strong>Alex Laurent</strong> — Atelier Studio
+              </button>
+            </div>
+          </div>
+        )}
+
+        {error && <div className="api-error" role="alert">{error}</div>}
+
+        <form onSubmit={handleAuth}>
+          {signup && <>
+            <label>{t.fullName}<input autoComplete="name" placeholder="Beatrix Meier" value={fullName} onChange={e => setFullName(e.target.value)} required /></label>
+            <label>{t.companyLabel}<input placeholder={t.companyPlaceholder} value={company} onChange={e => setCompany(e.target.value)} /></label>
+          </>}
+          <label>{t.email}<input type="email" autoComplete="email" placeholder={language === 'fr' ? 'vous@hotel-basel.ch' : 'you@hotel-basel.ch'} value={email} onChange={e => setEmail(e.target.value)} required /></label>
+          <label>{t.password}<input type="password" autoComplete={signup ? 'new-password' : 'current-password'} placeholder="••••••••••" value={password} onChange={e => setPassword(e.target.value)} minLength="6" required /></label>
+          {!signup && <button type="button" className="forgot-link">{t.forgot}</button>}
+          <button className="primary-button auth-submit" type="submit" disabled={busy}>
+            {busy ? t.loggingIn : (signup ? t.signup : t.login)}
+            <Icon name="arrow" size={16} />
+          </button>
+        </form>
+        <div className="auth-separator"><span />{t.or}<span /></div>
+        <button className="sso-button" type="button" onClick={() => useDemoAccount('owner@hotelbasel.ch', 'basel2026')}>
+          <span className="google-mark">G</span> {t.google} (Demo)
+        </button>
+        <div className="auth-legal">{t.legal}</div>
+      </section>
+    </div>
+    <footer className="auth-footer">
+      <span>© 2026 MCPEX</span>
+      <button>{t.privacy}</button>
+      <button>{t.support}</button>
+      <span className="auth-foot-spacer" />
+      <span>{language.toUpperCase()} · CH</span>
+    </footer>
+  </main>
 }
 
 function PlaceholderPage({ page, t }) {
@@ -271,6 +450,7 @@ export default function App() {
   const [page, setPage] = useState('home')
   const [language, setLanguage] = useState('fr')
   const [authMode, setAuthMode] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
   const [servers, setServers] = useState([])
   const [selected, setSelected] = useState(null)
   const [stage, setStage] = useState('idle')
@@ -283,14 +463,32 @@ export default function App() {
   const [toast, setToast] = useState('')
   const t = translations[language]
 
+  async function loadUser() {
+    if (getAuthToken()) {
+      try {
+        const res = await getCurrentUser()
+        if (res?.user) setCurrentUser(res.user)
+      } catch {
+        setAuthToken(null)
+        setCurrentUser(null)
+      }
+    }
+  }
+
   async function refreshServers() {
     setLoadingServers(true)
     try { const result = await listMcpServers(); setServers((result || []).map(normalizeServer)) }
     catch (err) { setError(err.message) }
     finally { setLoadingServers(false) }
   }
-  useEffect(() => { refreshServers() }, [])
+
+  useEffect(() => {
+    loadUser()
+    refreshServers()
+  }, [])
+
   function beginNew() { setPage('home'); setStage('idle'); setSelected(null); window.setTimeout(() => document.getElementById('site-url')?.focus(), 50) }
+
   async function analyzeUrl(url, isInteractive = false) {
     setAnalyzedUrl(url); setStage('analyzing'); setBusy(true); setError('')
     try {
@@ -305,6 +503,7 @@ export default function App() {
     } catch (err) { setError(err.message); setStage('idle') }
     finally { setBusy(false) }
   }
+
   async function enrichServer(source, values) {
     if (!generated?.server_id) return
     setBusy(true); setError('')
@@ -317,20 +516,47 @@ export default function App() {
     } catch (err) { setError(err.message) }
     finally { setBusy(false) }
   }
+
   async function selectServer(server) {
     setSelected(server)
     try { setSelected(normalizeServer(await getMcpServer(server.id))) } catch (err) { setError(err.message) }
   }
+
   async function updateServer(server) {
     try { const refreshed = normalizeServer(await getMcpServer(server.id)); setServers(current => current.map(item => item.id === server.id ? refreshed : item)); setSelected(refreshed) }
     catch (err) { setError(err.message) }
   }
-  function completeAuth() { setAuthMode(null); setToast(language === 'fr' ? 'Espace de travail prêt' : 'Workspace ready'); window.setTimeout(() => setToast(''), 2400) }
+
+  function handleLogout() {
+    logoutBusinessOwner().catch(() => {})
+    setAuthToken(null)
+    setCurrentUser(null)
+    setToast(t.authLoggedOut)
+    window.setTimeout(() => setToast(''), 2400)
+  }
+
+  function completeAuth(user) {
+    if (user) setCurrentUser(user)
+    setAuthMode(null)
+    setToast(t.authSuccess)
+    window.setTimeout(() => setToast(''), 2400)
+  }
 
   if (authMode) return <AuthPage mode={authMode} setMode={setAuthMode} t={t} language={language} setLanguage={setLanguage} onComplete={completeAuth} />
 
   return <div className="app-shell">
-    <Sidebar page={page} setPage={setPage} t={t} onNew={beginNew} language={language} setLanguage={setLanguage} onAuth={setAuthMode} servers={servers} />
+    <Sidebar
+      page={page}
+      setPage={setPage}
+      t={t}
+      onNew={beginNew}
+      language={language}
+      setLanguage={setLanguage}
+      onAuth={setAuthMode}
+      onLogout={handleLogout}
+      currentUser={currentUser}
+      servers={servers}
+    />
     <div className="main-column">
       {page === 'home' && <Home t={t} language={language} servers={servers} onSelect={selectServer} onViewAll={() => setPage('servers')} onAnalyze={analyzeUrl} stage={stage} analyzedUrl={analyzedUrl} setStage={setStage} generated={generated} needsEnrichment={needsEnrichment} busy={busy} error={error} onEnrich={enrichServer} />}
       {page === 'servers' && <ServersPage t={t} language={language} servers={servers} onSelect={selectServer} onNew={beginNew} loading={loadingServers} />}
@@ -342,3 +568,4 @@ export default function App() {
     {toast && <div className="toast"><Icon name="check" size={16} />{toast}</div>}
   </div>
 }
+

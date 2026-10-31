@@ -37,8 +37,6 @@ describe('McpCreatorController (e2e)', () => {
       .join(',');
   });
 
-
-
   afterAll(async () => {
     await app.close();
   });

@@ -9,6 +9,7 @@
     ./disk.nix
     ./backend.nix
     ./caddy.nix
+    ./hotel-demo.nix
   ];
 
   assertions = [

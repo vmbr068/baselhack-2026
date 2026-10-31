@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { chromium, Browser } from 'playwright';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
@@ -8,6 +12,10 @@ import {
   ActionButton,
   ScannedRoomOption,
 } from './mcp-creator.types.js';
+import {
+  assertAllowedSite,
+  blockDisallowedNavigation,
+} from './site-allowlist.js';
 
 @Injectable()
 export class ScannerService {
@@ -26,6 +34,7 @@ export class ScannerService {
     headless = true,
     timeoutMs = 25000,
   ): Promise<WebScanResult> {
+    assertAllowedSite(url);
     this.logger.log(`Scanning website: ${url}`);
     const browser: Browser = await chromium.launch({
       headless,
@@ -36,13 +45,22 @@ export class ScannerService {
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     });
+    await blockDisallowedNavigation(context);
     const page = await context.newPage();
 
     try {
-      await page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: timeoutMs,
-      });
+      try {
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: timeoutMs,
+        });
+      } catch (error) {
+        const reason = (error as Error).message.split('\n')[0];
+        this.logger.warn(`Cannot reach ${url}: ${reason}`);
+        throw new UnprocessableEntityException(
+          `Cannot reach ${url} from the server. Use a public URL: localhost is the server itself.`,
+        );
+      }
       await page.waitForTimeout(1000);
 
       const title = await page.title();

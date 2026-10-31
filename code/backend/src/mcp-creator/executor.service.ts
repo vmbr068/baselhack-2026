@@ -537,7 +537,87 @@ export class ExecutorService {
             };
       }
 
-      // 3. screenshot only
+      // 3. submit_form (generic form input and submission)
+      if (toolDef.executionStep === 'submit_form') {
+        for (const [key, val] of Object.entries(args)) {
+          const selector = selectors[key];
+          if (selector && val !== undefined && val !== null) {
+            try {
+              await page.fill(selector, String(val), { timeout: 3000 });
+            } catch {
+              try {
+                await page.selectOption(selector, String(val), {
+                  timeout: 3000,
+                });
+              } catch {}
+            }
+          }
+        }
+
+        if (selectors.submit_button) {
+          try {
+            await page.click(selectors.submit_button, { timeout: 4000 });
+            await this.settle(page);
+          } catch {}
+        }
+
+        const filename = `action_${Date.now()}.png`;
+        await page.screenshot({
+          path: path.join(this.screenshotDir, filename),
+        });
+
+        return {
+          tool_name: toolName,
+          success: true,
+          status: 'executed',
+          data: {
+            title: await page.title(),
+            url: page.url(),
+            submitted_fields: Object.keys(args),
+          },
+          screenshot_url: `/static/screenshots/${filename}`,
+        };
+      }
+
+      // 4. navigate_route (visit internal route, capture content preview & screenshot)
+      if (toolDef.executionStep === 'navigate_route') {
+        const targetPath = args.route || args.path || '/';
+        const targetFullUrl = new URL(targetPath, config.targetUrl).href;
+        assertAllowedSite(targetFullUrl);
+        await page.goto(targetFullUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 25000,
+        });
+        await this.settle(page);
+
+        const pageTitle = await page.title();
+        const mainText = await page.evaluate(() => {
+          const main = document.querySelector(
+            'main, article, #content, .content, body',
+          );
+          return (main ? (main as HTMLElement).innerText : document.body.innerText)
+            .replace(/\s+/g, ' ')
+            .slice(0, 1500);
+        });
+
+        const filename = `nav_${Date.now()}.png`;
+        await page.screenshot({ path: path.join(this.screenshotDir, filename) });
+
+        return {
+          tool_name: toolName,
+          success: true,
+          status: 'executed',
+          data: {
+            title: pageTitle,
+            route: targetPath,
+            url: targetFullUrl,
+            content_preview: mainText,
+          },
+          screenshot_url: `/static/screenshots/${filename}`,
+        };
+      }
+
+      // 5. screenshot only
       const filename = `screenshot_${Date.now()}.png`;
       await page.screenshot({ path: path.join(this.screenshotDir, filename) });
       return {

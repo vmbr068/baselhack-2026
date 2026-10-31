@@ -22,11 +22,18 @@ export interface ScannedRoomOption {
   bookSelector?: string | null;
 }
 
+export interface NavigationRoute {
+  path: string;
+  label: string;
+  url: string;
+}
+
 export interface WebScanResult {
   url: string;
   title: string;
   inputs: FormField[];
   buttons: ActionButton[];
+  routes?: NavigationRoute[];
   detectedRooms: ScannedRoomOption[];
   screenshotPath?: string;
   authenticated?: boolean;
@@ -59,7 +66,12 @@ export interface MCPToolDefinition {
   description: string;
   enabled?: boolean;
   parameters: Record<string, any>;
-  executionStep: 'check_availability' | 'reserve_room' | 'get_screenshot';
+  executionStep:
+    | 'check_availability'
+    | 'reserve_room'
+    | 'get_screenshot'
+    | 'submit_form'
+    | 'navigate_route';
   selectorsMapping: Record<string, string>;
   executionMode?: 'browser' | 'api' | 'hybrid';
   apiEndpoint?: string;

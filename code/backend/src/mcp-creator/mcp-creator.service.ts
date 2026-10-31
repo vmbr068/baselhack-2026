@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import { chromium } from 'playwright';
 import { ScannerService } from './scanner.service.js';
 import { SynthesizerService } from './synthesizer.service.js';
 import { ExecutorService } from './executor.service.js';
@@ -17,6 +18,7 @@ import {
   GenerateResponse,
   ToolCallResponse,
   EnrichResponse,
+  AuthSessionData,
 } from './mcp-creator.types.js';
 
 @Injectable()
@@ -70,13 +72,110 @@ export class McpCreatorService implements OnModuleInit {
     await fs.writeFile(filePath, JSON.stringify(config, null, 2), 'utf-8');
   }
 
-  async scanWebsite(url: string): Promise<WebScanResult> {
-    return this.scanner.scanWebsite(url);
+  async scanWebsite(
+    url: string,
+    authSession?: AuthSessionData | string,
+  ): Promise<WebScanResult> {
+    return this.scanner.scanWebsite(url, authSession);
   }
 
-  async generate(url: string): Promise<GenerateResponse> {
-    const scanResult = await this.scanner.scanWebsite(url);
+  async interactiveLogin(
+    url: string,
+    timeoutMs = 60000,
+  ): Promise<{ auth_session: AuthSessionData; message: string }> {
+    const isHeadless =
+      process.env.PLAYWRIGHT_HEADLESS === 'true' ||
+      (process.platform !== 'darwin' && !process.env.DISPLAY);
+
+    this.logger.log(
+      `Launching interactive login for ${url} (headless: ${isHeadless})`,
+    );
+
+    const browser = await chromium.launch({
+      headless: isHeadless,
+      executablePath: process.env.CHROMIUM_PATH,
+    });
+
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    });
+
+    const page = await context.newPage();
+
+    // Inject a top banner informing the user
+    await page.addInitScript(() => {
+      window.addEventListener('DOMContentLoaded', () => {
+        const banner = document.createElement('div');
+        banner.id = 'mcpex-login-banner';
+        banner.style.cssText =
+          'position:fixed;top:0;left:0;right:0;background:#1e3a8a;color:white;padding:12px 16px;text-align:center;font-size:14px;font-family:sans-serif;z-index:999999;box-shadow:0 4px 12px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;gap:12px;';
+        banner.innerHTML =
+          '<strong>MCPEX Bridge:</strong> Connectez-vous sur ce site. Cette fen&ecirc;tre se fermera automatiquement d&egrave;s que vous serez connect&eacute;.';
+        document.body.prepend(banner);
+      });
+    });
+
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    const initialCookies = await context.cookies();
+    const initialCookieCount = initialCookies.length;
+    const start = Date.now();
+    let authenticated = false;
+
+    while (Date.now() - start < timeoutMs) {
+      if (page.isClosed()) {
+        break;
+      }
+
+      const currentCookies = await context.cookies();
+      const hasAuthCookie = currentCookies.some((c) =>
+        ['session', 'auth', 'token', 'login', 'jwt', 'user'].some((k) =>
+          c.name.toLowerCase().includes(k),
+        ),
+      );
+
+      if (hasAuthCookie || currentCookies.length > initialCookieCount) {
+        authenticated = true;
+        await page.waitForTimeout(1000);
+        break;
+      }
+
+      await new Promise((r) => setTimeout(r, 800));
+    }
+
+    const storageState = (await context.storageState()) as AuthSessionData;
+    await browser.close();
+
+    return {
+      auth_session: storageState,
+      message: authenticated
+        ? 'Authentication captured successfully'
+        : 'Session captured',
+    };
+  }
+
+  async generateInteractive(
+    url: string,
+    timeoutMs = 60000,
+  ): Promise<GenerateResponse> {
+    const { auth_session } = await this.interactiveLogin(url, timeoutMs);
+    return this.generate(url, auth_session);
+  }
+
+  async generate(
+    url: string,
+    authSession?: AuthSessionData | string,
+  ): Promise<GenerateResponse> {
+    const scanResult = await this.scanner.scanWebsite(url, authSession);
     const config = this.synthesizer.synthesizeMCPServer(scanResult);
+
+    if (authSession) {
+      config.authSession =
+        typeof authSession === 'string' ? JSON.parse(authSession) : authSession;
+    }
+
     await this.persistServer(config);
 
     return {
@@ -85,6 +184,7 @@ export class McpCreatorService implements OnModuleInit {
       target_url: config.targetUrl,
       tools: config.tools,
       call_endpoint: `/api/v1/servers/${config.serverId}/call`,
+      has_auth_session: Boolean(config.authSession),
       mcp_schema: {
         name: config.hotelName,
         server_id: config.serverId,
@@ -125,12 +225,22 @@ export class McpCreatorService implements OnModuleInit {
     serverId: string,
     toolName: string,
     args: Record<string, any> = {},
+    confirmedByHuman?: boolean,
+    confirmationToken?: string,
+    authSession?: AuthSessionData | string,
   ): Promise<ToolCallResponse> {
     const config = this.getServer(serverId);
     if (config.enabled === false) {
       return { tool_name: toolName, success: false, data: {}, error: `MCP server '${config.hotelName}' is disabled` };
     }
-    return this.executor.executeTool(config, toolName, args);
+    return this.executor.executeTool(
+      config,
+      toolName,
+      args,
+      confirmedByHuman,
+      confirmationToken,
+      authSession,
+    );
   }
 
   async setServerEnabled(serverId: string, enabled: boolean): Promise<MCPServerConfig> {
@@ -151,9 +261,15 @@ export class McpCreatorService implements OnModuleInit {
     return config;
   }
 
-  async enrichWithWordpress(serverId: string, customWpUrl?: string, accessToken?: string, wpSiteId?: string): Promise<EnrichResponse> {
+  async enrichWithWordpress(
+    serverId: string,
+    customWpUrl?: string,
+    accessToken?: string,
+    wpSiteId?: string,
+  ): Promise<EnrichResponse> {
     const config = this.getServer(serverId);
-    const { enrichedConfig, summary } = await this.wpEnricher.enrichWithWordpress(config, customWpUrl, accessToken, wpSiteId);
+    const { enrichedConfig, summary } =
+      await this.wpEnricher.enrichWithWordpress(config, customWpUrl, accessToken, wpSiteId);
     await this.persistServer(enrichedConfig);
 
     return {

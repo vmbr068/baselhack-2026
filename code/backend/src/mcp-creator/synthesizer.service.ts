@@ -138,6 +138,8 @@ export class SynthesizerService {
           required: ['check_in', 'check_out'],
         },
         executionStep: 'check_availability',
+        requires_confirmation: false,
+        is_irreversible: false,
         selectorsMapping: {
           check_in_input: checkInSel || '#check-in',
           check_out_input: checkOutSel || '#check-out',
@@ -147,10 +149,23 @@ export class SynthesizerService {
       },
       {
         name: 'reserve_room',
-        description: `Book a specific room at ${hotelName} with guest contact details and confirmation.`,
+        description: `[IRREVERSIBLE ACTION - REQUIRES HUMAN CONFIRMATION] Book a specific room at ${hotelName} with guest contact details. This action creates a real booking and requires explicit human approval before execution.`,
         parameters: {
           type: 'object',
           properties: {
+            check_in: {
+              type: 'string',
+              description: 'Check-in date in YYYY-MM-DD format',
+            },
+            check_out: {
+              type: 'string',
+              description: 'Check-out date in YYYY-MM-DD format',
+            },
+            guests: {
+              type: 'integer',
+              description: 'Number of guests (default: 2)',
+              default: 2,
+            },
             room_title: {
               type: 'string',
               description:
@@ -172,10 +187,29 @@ export class SynthesizerService {
               type: 'string',
               description: 'Any special preferences or requests (optional)',
             },
+            confirmed_by_human: {
+              type: 'boolean',
+              description:
+                'Explicit confirmation flag. Must be true to execute this irreversible booking action.',
+              default: false,
+            },
+            confirmation_token: {
+              type: 'string',
+              description:
+                'Token provided by the pending confirmation request when confirmation is asked.',
+            },
           },
-          required: ['room_title', 'guest_name', 'guest_email'],
+          required: [
+            'room_title',
+            'check_in',
+            'check_out',
+            'guest_name',
+            'guest_email',
+          ],
         },
         executionStep: 'reserve_room',
+        requires_confirmation: true,
+        is_irreversible: true,
         selectorsMapping: {
           guest_name_input: guestNameSel || '#guest-name',
           guest_email_input: guestEmailSel || '#guest-email',
@@ -192,6 +226,8 @@ export class SynthesizerService {
           properties: {},
         },
         executionStep: 'get_screenshot',
+        requires_confirmation: false,
+        is_irreversible: false,
         selectorsMapping: {},
       },
     ];

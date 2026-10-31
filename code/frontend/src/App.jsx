@@ -11,9 +11,12 @@ import {
   setMcpServerEnabled,
   setMcpToolEnabled,
   generateMcp,
+  generateMcpInteractive,
   enrichMcpWithGithub,
   enrichMcpWithWordpress,
   consumeOAuthTicket,
+  getCurrentUser,
+  getAuthToken,
 } from './api'
 
 // Initial fallback sample data to guarantee live hackathon demo readiness
@@ -106,6 +109,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [copiedId, setCopiedId] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
   const [notifications, setNotifications] = useState([
     { title: 'Serveur Grand Hôtel Basel prêt pour les agents IA', time: 'Il y a 5 min' },
   ])
@@ -116,6 +120,15 @@ export default function App() {
     document.documentElement.className = `theme-${colorScheme}`
     document.body.className = `theme-${colorScheme}`
   }, [colorScheme])
+
+  // Load user if token exists
+  useEffect(() => {
+    if (getAuthToken()) {
+      getCurrentUser()
+        .then(user => setCurrentUser(user))
+        .catch(() => setCurrentUser(null))
+    }
+  }, [])
 
   // Load servers from backend
   async function refreshServers() {
@@ -178,14 +191,17 @@ export default function App() {
   }
 
   // Analyze URL and build MCP
-  const handleAnalyze = async (targetUrl) => {
+  const handleAnalyze = async (targetUrl, isInteractive = false) => {
     setAnalyzedUrl(targetUrl)
     setStage('analyzing')
     setBusy(true)
     setError('')
 
     try {
-      const result = await generateMcp(targetUrl)
+      const result = isInteractive
+        ? await generateMcpInteractive(targetUrl)
+        : await generateMcp(targetUrl)
+
       let detail = result
       try {
         detail = await getMcpServer(result.server_id || result.serverId)

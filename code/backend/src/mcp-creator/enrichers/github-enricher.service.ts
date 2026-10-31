@@ -1,8 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import {
-  MCPServerConfig,
-  MCPToolDefinition,
-} from '../mcp-creator.types.js';
+import { MCPServerConfig, MCPToolDefinition } from '../mcp-creator.types.js';
 
 interface GitTreeItem {
   path: string;
@@ -17,7 +14,10 @@ export class GithubEnricherService {
   private parseRepoUrl(rawUrl: string): { owner: string; repo: string } {
     try {
       const parsed = new URL(rawUrl);
-      const parts = parsed.pathname.replace(/^\//, '').replace(/\.git$/, '').split('/');
+      const parts = parsed.pathname
+        .replace(/^\//, '')
+        .replace(/\.git$/, '')
+        .split('/');
       if (parts.length >= 2) {
         return { owner: parts[0], repo: parts[1] };
       }
@@ -32,9 +32,14 @@ export class GithubEnricherService {
     repoUrl: string,
     branch = 'main',
     githubToken?: string,
-  ): Promise<{ enrichedConfig: MCPServerConfig; summary: Record<string, any> }> {
+  ): Promise<{
+    enrichedConfig: MCPServerConfig;
+    summary: Record<string, any>;
+  }> {
     const { owner, repo } = this.parseRepoUrl(repoUrl);
-    this.logger.log(`Enriching MCP server '${config.serverId}' with GitHub codebase: ${owner}/${repo} (${branch})`);
+    this.logger.log(
+      `Enriching MCP server '${config.serverId}' with GitHub codebase: ${owner}/${repo} (${branch})`,
+    );
 
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github.v3+json',
@@ -73,7 +78,9 @@ export class GithubEnricherService {
         treeItems = data.tree || [];
       }
     } catch (err: any) {
-      this.logger.warn(`Could not fetch GitHub repository tree: ${err.message}`);
+      this.logger.warn(
+        `Could not fetch GitHub repository tree: ${err.message}`,
+      );
       throw new BadRequestException(
         `Unable to fetch repository '${owner}/${repo}'. Ensure the repository is public or provide a valid githubToken. Error: ${err.message}`,
       );
@@ -92,7 +99,9 @@ export class GithubEnricherService {
     if (specFiles.length > 0) {
       const specItem = specFiles[0];
       detectedSpecPath = specItem.path;
-      this.logger.log(`Found OpenAPI specification in codebase: ${detectedSpecPath}`);
+      this.logger.log(
+        `Found OpenAPI specification in codebase: ${detectedSpecPath}`,
+      );
 
       try {
         const rawSpecRes = await fetch(
@@ -103,7 +112,10 @@ export class GithubEnricherService {
           const content = await rawSpecRes.text();
           if (specItem.path.endsWith('.json')) {
             const specJson = JSON.parse(content);
-            parsedOpenApiTools = this.convertOpenApiToMcpTools(specJson, config.targetUrl);
+            parsedOpenApiTools = this.convertOpenApiToMcpTools(
+              specJson,
+              config.targetUrl,
+            );
           }
         }
       } catch (specErr: any) {
@@ -143,18 +155,26 @@ export class GithubEnricherService {
         );
         if (rawRes.ok) {
           const code = await rawRes.text();
-          
+
           // Regex for NestJS / Express / FastAPI / WordPress routes
-          const routeRegex = /(?:@Post|@Get|app\.post|app\.get|register_rest_route|@router\.post|@router\.get)\s*\(\s*['"]([^'"]+)['"]/g;
+          const routeRegex =
+            /(?:@Post|@Get|app\.post|app\.get|register_rest_route|@router\.post|@router\.get)\s*\(\s*['"]([^'"]+)['"]/g;
           let match: RegExpExecArray | null;
           while ((match = routeRegex.exec(code)) !== null) {
             const routeStr = match[1];
             if (
-              ['book', 'reserve', 'room', 'availability', 'search', 'hotel'].some((k) =>
-                routeStr.toLowerCase().includes(k),
-              )
+              [
+                'book',
+                'reserve',
+                'room',
+                'availability',
+                'search',
+                'hotel',
+              ].some((k) => routeStr.toLowerCase().includes(k))
             ) {
-              const method = match[0].toLowerCase().includes('get') ? 'GET' : 'POST';
+              const method = match[0].toLowerCase().includes('get')
+                ? 'GET'
+                : 'POST';
               discoveredCodeEndpoints.push({
                 file: fileItem.path,
                 detectedRoute: routeStr,
@@ -171,12 +191,18 @@ export class GithubEnricherService {
 
     // Enrich existing check_availability and reserve_room
     for (const tool of updatedTools) {
-      if (tool.name === 'check_availability' && (parsedOpenApiTools.length > 0 || discoveredCodeEndpoints.length > 0)) {
+      if (
+        tool.name === 'check_availability' &&
+        (parsedOpenApiTools.length > 0 || discoveredCodeEndpoints.length > 0)
+      ) {
         tool.description = `${tool.description} (Enriched with GitHub codebase analysis from ${owner}/${repo})`;
         tool.sourceOrigin = 'github';
         tool.executionMode = 'hybrid';
       }
-      if (tool.name === 'reserve_room' && (parsedOpenApiTools.length > 0 || discoveredCodeEndpoints.length > 0)) {
+      if (
+        tool.name === 'reserve_room' &&
+        (parsedOpenApiTools.length > 0 || discoveredCodeEndpoints.length > 0)
+      ) {
         tool.description = `${tool.description} (Enriched with GitHub codebase analysis from ${owner}/${repo})`;
         tool.sourceOrigin = 'github';
         tool.executionMode = 'hybrid';
@@ -219,7 +245,10 @@ export class GithubEnricherService {
     };
   }
 
-  private convertOpenApiToMcpTools(spec: any, baseUrl: string): MCPToolDefinition[] {
+  private convertOpenApiToMcpTools(
+    spec: any,
+    baseUrl: string,
+  ): MCPToolDefinition[] {
     const tools: MCPToolDefinition[] = [];
     const paths = spec.paths || {};
 
@@ -227,7 +256,9 @@ export class GithubEnricherService {
       for (const [method, op] of Object.entries<any>(methods)) {
         const lowerPath = pathStr.toLowerCase();
         if (
-          !['book', 'reserve', 'room', 'hotel', 'availability'].some((k) => lowerPath.includes(k))
+          !['book', 'reserve', 'room', 'hotel', 'availability'].some((k) =>
+            lowerPath.includes(k),
+          )
         ) {
           continue;
         }
@@ -239,19 +270,30 @@ export class GithubEnricherService {
           .toLowerCase();
 
         const toolName = `api_${cleanName}_${method.toLowerCase()}`;
-        const description = op.description || op.summary || `OpenAPI endpoint [${method.toUpperCase()}] ${pathStr}`;
+        const description =
+          op.description ||
+          op.summary ||
+          `OpenAPI endpoint [${method.toUpperCase()}] ${pathStr}`;
 
         // Schema extraction
-        let parameters: Record<string, any> = { type: 'object', properties: {} };
+        let parameters: Record<string, any> = {
+          type: 'object',
+          properties: {},
+        };
         if (op.requestBody?.content?.['application/json']?.schema) {
           parameters = op.requestBody.content['application/json'].schema;
         }
+
+        const isBooking =
+          lowerPath.includes('book') || lowerPath.includes('reserve');
 
         tools.push({
           name: toolName,
           description,
           parameters,
-          executionStep: lowerPath.includes('book') || lowerPath.includes('reserve') ? 'reserve_room' : 'check_availability',
+          executionStep: isBooking ? 'reserve_room' : 'check_availability',
+          requires_confirmation: isBooking,
+          is_irreversible: isBooking,
           selectorsMapping: {},
           executionMode: 'hybrid',
           apiEndpoint: `${baseUrl.replace(/\/+$/, '')}${pathStr}`,

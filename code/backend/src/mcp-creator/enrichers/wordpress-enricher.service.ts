@@ -1,8 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import {
-  MCPServerConfig,
-  MCPToolDefinition,
-} from '../mcp-creator.types.js';
+import { MCPServerConfig, MCPToolDefinition } from '../mcp-creator.types.js';
+import { assertAllowedSite } from '../site-allowlist.js';
 
 interface WpRouteEndpoint {
   methods: string[];
@@ -27,35 +25,49 @@ export class WordpressEnricherService {
     customWpUrl?: string,
     accessToken?: string,
     wpSiteId?: string,
-  ): Promise<{ enrichedConfig: MCPServerConfig; summary: Record<string, any> }> {
+  ): Promise<{
+    enrichedConfig: MCPServerConfig;
+    summary: Record<string, any>;
+  }> {
     let baseUrl = (customWpUrl || config.targetUrl).replace(/\/+$/, '');
+    if (!wpSiteId) {
+      assertAllowedSite(baseUrl);
+    }
     const wpJsonUrl = wpSiteId
       ? `https://public-api.wordpress.com/wp/v2/sites/${encodeURIComponent(wpSiteId)}`
       : (baseUrl.endsWith('/wp-json') ? baseUrl : `${baseUrl}/wp-json`);
     if (wpSiteId) baseUrl = 'https://public-api.wordpress.com';
 
-    this.logger.log(`Enriching MCP server '${config.serverId}' using WordPress API: ${wpJsonUrl}`);
+    this.logger.log(
+      `Enriching MCP server '${config.serverId}' using WordPress API: ${wpJsonUrl}`,
+    );
 
     let indexData: any;
     try {
       const res = await fetch(wpJsonUrl, {
         headers: { Accept: 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+        redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
 
       if (!res.ok) {
-        throw new Error(`WordPress REST API responded with status ${res.status}`);
+        throw new Error(
+          `WordPress REST API responded with status ${res.status}`,
+        );
       }
       indexData = await res.json();
     } catch (err: any) {
-      this.logger.warn(`Failed to connect to WordPress REST API at ${wpJsonUrl}: ${err.message}`);
+      this.logger.warn(
+        `Failed to connect to WordPress REST API at ${wpJsonUrl}: ${err.message}`,
+      );
       throw new BadRequestException(
         `Unable to reach WordPress REST API at ${wpJsonUrl}. Please ensure the site is running WordPress with the REST API enabled. Error: ${err.message}`,
       );
     }
 
     const namespaces: string[] = indexData.namespaces || [];
-    const routes: Record<string, { endpoints: WpRouteEndpoint[] }> = indexData.routes || {};
+    const routes: Record<string, { endpoints: WpRouteEndpoint[] }> =
+      indexData.routes || {};
 
     const discoveredEndpoints: Array<{
       route: string;
@@ -81,7 +93,9 @@ export class WordpressEnricherService {
 
     for (const [routePath, routeInfo] of Object.entries(routes)) {
       const lowerRoute = routePath.toLowerCase();
-      const hasBookingKeyword = bookingKeywords.some((kw) => lowerRoute.includes(kw));
+      const hasBookingKeyword = bookingKeywords.some((kw) =>
+        lowerRoute.includes(kw),
+      );
 
       if (hasBookingKeyword && routeInfo.endpoints) {
         for (const ep of routeInfo.endpoints) {
@@ -92,7 +106,10 @@ export class WordpressEnricherService {
           let category: 'search' | 'booking' | 'room_info' = 'room_info';
           if (lowerRoute.includes('search') || lowerRoute.includes('availab')) {
             category = 'search';
-          } else if (lowerRoute.includes('book') || lowerRoute.includes('reserve')) {
+          } else if (
+            lowerRoute.includes('book') ||
+            lowerRoute.includes('reserve')
+          ) {
             category = 'booking';
           }
 
@@ -139,10 +156,16 @@ export class WordpressEnricherService {
         description: `Direct WordPress REST API endpoint [${ep.method}] ${ep.route} discovered on ${config.hotelName}.`,
         parameters: {
           type: 'object',
-          properties: Object.keys(properties).length > 0 ? properties : { payload: { type: 'object' } },
+          properties:
+            Object.keys(properties).length > 0
+              ? properties
+              : { payload: { type: 'object' } },
           required: requiredFields,
         },
-        executionStep: ep.category === 'booking' ? 'reserve_room' : 'check_availability',
+        executionStep:
+          ep.category === 'booking' ? 'reserve_room' : 'check_availability',
+        requires_confirmation: ep.category === 'booking',
+        is_irreversible: ep.category === 'booking',
         selectorsMapping: {},
         executionMode: 'hybrid',
         apiEndpoint: `${baseUrl}${ep.route}`,
@@ -152,7 +175,9 @@ export class WordpressEnricherService {
     }
 
     // Upgrade existing tools with API metadata if matching endpoints were found
-    const bookingApi = discoveredEndpoints.find((e) => e.category === 'booking');
+    const bookingApi = discoveredEndpoints.find(
+      (e) => e.category === 'booking',
+    );
     const searchApi = discoveredEndpoints.find((e) => e.category === 'search');
 
     const updatedTools = config.tools.map((tool) => {
@@ -200,7 +225,9 @@ export class WordpressEnricherService {
       enrichedConfig,
       summary: {
         namespacesDetected: namespaces,
-        discoveredBookingEndpoints: discoveredEndpoints.map((e) => `${e.method} ${e.route}`),
+        discoveredBookingEndpoints: discoveredEndpoints.map(
+          (e) => `${e.method} ${e.route}`,
+        ),
         toolsAdded: newTools.length,
         totalTools: finalTools.length,
       },

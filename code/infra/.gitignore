@@ -1,0 +1,11 @@
+.terraform/
+terraform/terraform.tfstate.*
+tfplan
+*.tfplan
+crash.log
+*.tfvars
+/result
+/result-*
+# Only the encrypted sops files are versioned
+secrets/*
+!secrets/tofu.yaml

@@ -11,6 +11,7 @@ import {
   FormField,
   ActionButton,
   ScannedRoomOption,
+  NavigationRoute,
   AuthSessionData,
 } from './mcp-creator.types.js';
 import { normalizeAuthSession } from './auth-session.helper.js';
@@ -76,6 +77,17 @@ export class ScannerService {
         );
       }
       await page.waitForTimeout(1000);
+      // Wait for any SPA / hydration to settle if inputs are not immediately present
+      const initialInputCount = await page.$$eval(
+        'input, select, textarea',
+        (els) => els.length,
+      );
+      if (initialInputCount === 0) {
+        await page
+          .waitForSelector('input, select, textarea, button', { timeout: 3000 })
+          .catch(() => {});
+        await page.waitForTimeout(500);
+      }
 
       const title = await page.title();
 
@@ -218,11 +230,71 @@ export class ScannerService {
         return rooms;
       });
 
+      // Extract Navigation Routes
+      const routesData = await page.evaluate((originUrl): NavigationRoute[] => {
+        const routes: NavigationRoute[] = [];
+        const seenPaths = new Set<string>();
+        let currentOrigin = '';
+        try {
+          currentOrigin = new URL(originUrl).origin;
+        } catch {
+          return routes;
+        }
+
+        const links = document.querySelectorAll<HTMLAnchorElement>(
+          'nav a, header a, .nav a, .menu a, .sidebar a, main a, a[href]',
+        );
+
+        links.forEach((a) => {
+          try {
+            const rawHref = a.getAttribute('href');
+            if (
+              !rawHref ||
+              rawHref.startsWith('#') ||
+              rawHref.startsWith('javascript:') ||
+              rawHref.startsWith('mailto:') ||
+              rawHref.startsWith('tel:')
+            ) {
+              return;
+            }
+            const resolved = new URL(rawHref, originUrl);
+            if (resolved.origin === currentOrigin) {
+              const path = resolved.pathname;
+              if (
+                path &&
+                !seenPaths.has(path) &&
+                !['.png', '.jpg', '.jpeg', '.svg', '.css', '.js', '.ico'].some(
+                  (ext) => path.endsWith(ext),
+                ) &&
+                seenPaths.size < 15
+              ) {
+                const label = (
+                  a.innerText ||
+                  a.getAttribute('title') ||
+                  a.getAttribute('aria-label') ||
+                  path
+                ).trim();
+                if (label && label.length > 1) {
+                  seenPaths.add(path);
+                  routes.push({
+                    path,
+                    label: label.replace(/\s+/g, ' ').slice(0, 40),
+                    url: resolved.href,
+                  });
+                }
+              }
+            }
+          } catch {}
+        });
+        return routes;
+      }, url);
+
       return {
         url,
         title,
         inputs: inputsData,
         buttons: buttonsData,
+        routes: routesData,
         detectedRooms: roomsData,
         screenshotPath: screenshotFilename,
         authenticated: Boolean(storageState || extraHeaders),

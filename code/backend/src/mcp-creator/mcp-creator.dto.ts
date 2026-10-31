@@ -66,7 +66,6 @@ export class ToolCallRequestDto {
   @ApiProperty({
     description: 'Name of the tool to execute',
     example: 'check_availability',
-    enum: ['check_availability', 'reserve_room', 'get_current_status'],
   })
   tool_name!: string;
 

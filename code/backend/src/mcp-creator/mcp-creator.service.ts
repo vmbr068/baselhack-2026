@@ -81,7 +81,7 @@ export class McpCreatorService implements OnModuleInit {
 
   async interactiveLogin(
     url: string,
-    timeoutMs = 60000,
+    timeoutMs = 120000,
   ): Promise<{ auth_session: AuthSessionData; message: string }> {
     const isHeadless =
       process.env.PLAYWRIGHT_HEADLESS === 'true' ||
@@ -97,56 +97,78 @@ export class McpCreatorService implements OnModuleInit {
     });
 
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
+      viewport: { width: 1280, height: 850 },
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     });
 
     const page = await context.newPage();
 
-    // Inject a top banner informing the user
+    // Inject a top banner informing the user with a button to validate
     await page.addInitScript(() => {
       window.addEventListener('DOMContentLoaded', () => {
+        if (document.getElementById('mcpex-login-banner')) return;
         const banner = document.createElement('div');
         banner.id = 'mcpex-login-banner';
         banner.style.cssText =
-          'position:fixed;top:0;left:0;right:0;background:#1e3a8a;color:white;padding:12px 16px;text-align:center;font-size:14px;font-family:sans-serif;z-index:999999;box-shadow:0 4px 12px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;gap:12px;';
-        banner.innerHTML =
-          '<strong>MCPEX Bridge:</strong> Connectez-vous sur ce site. Cette fen&ecirc;tre se fermera automatiquement d&egrave;s que vous serez connect&eacute;.';
+          'position:fixed;top:0;left:0;right:0;background:#0f172a;color:#f8fafc;padding:12px 24px;text-align:center;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #3b82f6;';
+        banner.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-weight:700;color:#60a5fa;letter-spacing:0.5px;">MCPEX SANDBOX</span>
+            <span style="color:#64748b;">|</span>
+            <span style="color:#e2e8f0;font-size:13px;">Connectez-vous sur ce site avec vos identifiants ou SSO. Une fois connecté, cliquez sur le bouton vert :</span>
+          </div>
+          <button id="mcpex-done-btn" style="background:#22c55e;color:white;border:none;border-radius:20px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(34,197,94,0.4);transition:all 0.2s;">
+            <span>Valider ma connexion & Continuer ✓</span>
+          </button>
+        `;
         document.body.prepend(banner);
+
+        document.getElementById('mcpex-done-btn')?.addEventListener('click', () => {
+          (window as any).__mcpex_auth_done = true;
+          const btn = document.getElementById('mcpex-done-btn');
+          if (btn) {
+            btn.style.background = '#15803d';
+            btn.innerText = 'Connexion validée ! Capture en cours...';
+          }
+        });
       });
     });
 
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (e: any) {
+      this.logger.warn(`Interactive login navigation error: ${e.message}`);
+    }
 
-    const initialCookies = await context.cookies();
-    const initialCookieCount = initialCookies.length;
     const start = Date.now();
     let authenticated = false;
 
     while (Date.now() - start < timeoutMs) {
       if (page.isClosed()) {
+        authenticated = true;
         break;
       }
 
-      const currentCookies = await context.cookies();
-      const hasAuthCookie = currentCookies.some((c) =>
-        ['session', 'auth', 'token', 'login', 'jwt', 'user'].some((k) =>
-          c.name.toLowerCase().includes(k),
-        ),
-      );
+      // Check if user clicked the "Valider ma connexion" button
+      const userClickedDone = await page
+        .evaluate(() => (window as any).__mcpex_auth_done === true)
+        .catch(() => false);
 
-      if (hasAuthCookie || currentCookies.length > initialCookieCount) {
+      if (userClickedDone) {
+        this.logger.log(`User clicked Valider for ${url}`);
         authenticated = true;
         await page.waitForTimeout(1000);
         break;
       }
 
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 600));
     }
 
-    const storageState = (await context.storageState()) as AuthSessionData;
-    await browser.close();
+    const storageState = (await context
+      .storageState()
+      .catch(() => ({}))) as AuthSessionData;
+    await browser.close().catch(() => {});
 
     return {
       auth_session: storageState,
@@ -174,6 +196,27 @@ export class McpCreatorService implements OnModuleInit {
     if (scanResult.screenshotPath) {
       config.scanSummary.screenshotPath = scanResult.screenshotPath;
       config.scanSummary.screenshot_url = `/static/screenshots/${scanResult.screenshotPath}`;
+    }
+
+    // If a server already exists for this exact target URL, replace it inplace
+    const normalizedTargetUrl = url.replace(/\/+$/, '').toLowerCase();
+    const existingEntry = Array.from(this.serversStore.entries()).find(
+      ([, server]) =>
+        server.targetUrl?.replace(/\/+$/, '').toLowerCase() ===
+        normalizedTargetUrl,
+    );
+
+    if (existingEntry) {
+      const [existingServerId, existingServer] = existingEntry;
+      // Retain the existing serverId so existing connections & bookmarks remain valid
+      config.serverId = existingServerId;
+      config.enabled = existingServer.enabled ?? true;
+      if (existingServer.codebaseEnrichment) {
+        config.codebaseEnrichment = existingServer.codebaseEnrichment;
+      }
+      this.logger.log(
+        `Replacing existing MCP server '${existingServerId}' for target URL '${url}'`,
+      );
     }
 
     if (authSession) {

@@ -10,6 +10,7 @@ import { AppModule } from './../src/app.module.js';
 describe('McpExchangeController (e2e)', () => {
   let app: INestApplication<App>;
   let serverId: string;
+  let token: string;
   const mockHotelFileUrl = pathToFileURL(
     path.resolve(process.cwd(), 'mock_hotel/index.html'),
   ).href;
@@ -38,6 +39,11 @@ describe('McpExchangeController (e2e)', () => {
       .post('/api/v1/generate')
       .send({ url: mockHotelFileUrl });
     serverId = res.body.server_id;
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'owner@hotelbasel.ch', password: 'basel2026' });
+    token = login.body.token;
   }, 60000);
 
   afterAll(async () => {
@@ -47,6 +53,7 @@ describe('McpExchangeController (e2e)', () => {
   it('/api/v1/exchange/mcps (POST) should publish a generated MCP with its metadata', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/exchange/mcps')
+      .set('Authorization', `Bearer ${token}`)
       .send({ server_id: serverId, description: 'Grand Hotel Basel booking' });
 
     expect(res.status).toBe(201);
@@ -60,6 +67,7 @@ describe('McpExchangeController (e2e)', () => {
     expect(v1.version).toBe(1);
     expect(v1.server_id).toBe(serverId);
     expect(v1.description).toBe('Grand Hotel Basel booking');
+    expect(v1.published_by).toContain('Beatrix Meier');
     const toolNames = v1.tools.map((t: any) => t.name);
     expect(toolNames).toContain('check_availability');
     expect(toolNames).toContain('reserve_room');
@@ -68,6 +76,7 @@ describe('McpExchangeController (e2e)', () => {
   it('/api/v1/exchange/mcps (POST) republishing the same site should add a version without overwriting', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/exchange/mcps')
+      .set('Authorization', `Bearer ${token}`)
       .send({ server_id: serverId, description: 'Second publication' });
 
     expect(res.status).toBe(201);
@@ -98,9 +107,18 @@ describe('McpExchangeController (e2e)', () => {
   it('/api/v1/exchange/mcps (POST) should reject an unknown server id', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/exchange/mcps')
+      .set('Authorization', `Bearer ${token}`)
       .send({ server_id: 'does-not-exist-12345' });
 
     expect(res.status).toBe(404);
+  });
+
+  it('/api/v1/exchange/mcps (POST) should require a business owner login', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/exchange/mcps')
+      .send({ server_id: serverId });
+
+    expect(res.status).toBe(401);
   });
 
   it('/api/v1/exchange/mcps (GET) should list published MCPs with their summary', async () => {
@@ -139,7 +157,9 @@ describe('McpExchangeController (e2e)', () => {
   });
 
   it('/api/v1/exchange/mcps/:entryId (GET) should return the detail with versions and tools', async () => {
-    const list = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+    const list = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps',
+    );
     const entryId = list.body[0].entry_id;
 
     const res = await request(app.getHttpServer()).get(
@@ -155,7 +175,9 @@ describe('McpExchangeController (e2e)', () => {
   });
 
   it('/api/v1/exchange/mcps/:entryId/versions/:n (GET) should return one version with its tools', async () => {
-    const list = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+    const list = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps',
+    );
     const entryId = list.body[0].entry_id;
 
     const res = await request(app.getHttpServer()).get(

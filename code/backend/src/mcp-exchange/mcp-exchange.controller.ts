@@ -7,9 +7,18 @@ import {
   Query,
   Req,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
+import { BusinessAuthGuard, CurrentUser } from '../auth/auth.guard.js';
+import type { BusinessUser } from '../auth/auth.types.js';
 import { McpExchangeService } from './mcp-exchange.service.js';
 import { PublishRequestDto } from './mcp-exchange.dto.js';
 import type {
@@ -26,11 +35,16 @@ export class McpExchangeController {
 
   @ApiOperation({
     summary:
-      'Publish a generated MCP server to the Exchange (append-only: republishing the same site adds a new version)',
+      'Publish a generated MCP server to the Exchange (append-only: republishing the same site adds a new version). Requires a business owner login.',
   })
+  @ApiBearerAuth()
+  @UseGuards(BusinessAuthGuard)
   @Post('mcps')
-  async publish(@Body() dto: PublishRequestDto): Promise<PublishResponse> {
-    return this.mcpExchangeService.publish(dto.server_id, dto.description);
+  async publish(
+    @Body() dto: PublishRequestDto,
+    @CurrentUser() user: BusinessUser,
+  ): Promise<PublishResponse> {
+    return this.mcpExchangeService.publish(dto.server_id, dto.description, user);
   }
 
   @ApiOperation({
@@ -49,18 +63,26 @@ export class McpExchangeController {
   }
 
   @ApiOperation({
-    summary: 'Get the detail of a published MCP: all its versions and their tools',
+    summary:
+      'Get the detail of a published MCP: all its versions and their tools',
   })
-  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({
+    name: 'entryId',
+    example: 'ex_localhost-3000-mock-hotel_89bc5b29',
+  })
   @Get('mcps/:entryId')
   getMcp(@Param('entryId') entryId: string): PublishResponse {
     return this.mcpExchangeService.getEntry(entryId);
   }
 
   @ApiOperation({
-    summary: 'Get one published version of an MCP, with its tools and call endpoint',
+    summary:
+      'Get one published version of an MCP, with its tools and call endpoint',
   })
-  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({
+    name: 'entryId',
+    example: 'ex_localhost-3000-mock-hotel_89bc5b29',
+  })
   @ApiParam({ name: 'version', example: 1 })
   @Get('mcps/:entryId/versions/:version')
   getMcpVersion(
@@ -74,7 +96,10 @@ export class McpExchangeController {
     summary:
       'Get the connection details of a published version: MCP SSE endpoint, stdio bridge command and ready-to-paste Claude configuration',
   })
-  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({
+    name: 'entryId',
+    example: 'ex_localhost-3000-mock-hotel_89bc5b29',
+  })
   @ApiParam({ name: 'version', example: 1 })
   @Get('mcps/:entryId/versions/:version/connection')
   getMcpConnection(

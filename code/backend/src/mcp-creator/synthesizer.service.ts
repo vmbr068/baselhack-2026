@@ -3,6 +3,7 @@ import {
   WebScanResult,
   MCPServerConfig,
   MCPToolDefinition,
+  FormField,
 } from './mcp-creator.types.js';
 
 @Injectable()
@@ -16,9 +17,68 @@ export class SynthesizerService {
   }
 
   synthesizeMCPServer(scan: WebScanResult): MCPServerConfig {
-    const hotelName = scan.title || 'Hotel Booking';
-    const serverId = `mcp_${this.cleanSlug(hotelName)}_${Date.now()}`;
+    const siteTitle = scan.title || 'Web Service';
+    const serverId = `mcp_${this.cleanSlug(siteTitle)}_${Date.now()}`;
 
+    // Decide whether to synthesize standard Hotel demo tools or generic web service tools
+    const isHotelSite = this.detectHotelSite(scan);
+
+    const tools: MCPToolDefinition[] = isHotelSite
+      ? this.synthesizeHotelTools(scan, siteTitle)
+      : this.synthesizeGenericTools(scan, siteTitle);
+
+    return {
+      serverId,
+      hotelName: siteTitle,
+      targetUrl: scan.url,
+      createdAt: new Date().toISOString(),
+      tools,
+      scanSummary: {
+        inputsDetected: scan.inputs.length,
+        buttonsDetected: scan.buttons.length,
+        roomsDetected: scan.detectedRooms.length,
+        screenshotPath: scan.screenshotPath,
+        isHotelSite,
+      },
+    };
+  }
+
+  /**
+   * Detects if the scanned website is an accommodation/hotel booking service.
+   * Ensures 100% backward compatibility with demo sites and E2E test suites.
+   */
+  private detectHotelSite(scan: WebScanResult): boolean {
+    // Specific markers for the demo mock hotel and Rheinblick
+    if (
+      scan.url.includes('mock-hotel') ||
+      scan.url.includes('mock_hotel') ||
+      scan.url.includes('hotel.bh2026') ||
+      scan.url.includes('hotel') ||
+      scan.title.toLowerCase().includes('hotel') ||
+      scan.detectedRooms.length > 0
+    ) {
+      return true;
+    }
+
+    // Check for check-in / check-out date presence
+    const hasCheckIn = scan.inputs.some((i) =>
+      ['check-in', 'checkin', 'arrival'].some((k) =>
+        `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase().includes(k),
+      ),
+    );
+    const hasCheckOut = scan.inputs.some((i) =>
+      ['check-out', 'checkout', 'departure'].some((k) =>
+        `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase().includes(k),
+      ),
+    );
+
+    return hasCheckIn && hasCheckOut;
+  }
+
+  private synthesizeHotelTools(
+    scan: WebScanResult,
+    hotelName: string,
+  ): MCPToolDefinition[] {
     let checkInSel: string | null = null;
     let checkOutSel: string | null = null;
     let guestsSel: string | null = null;
@@ -112,7 +172,7 @@ export class SynthesizerService {
         "button[type='submit'], .btn-confirm, #btn-confirm-reservation";
     }
 
-    const tools: MCPToolDefinition[] = [
+    return [
       {
         name: 'check_availability',
         description: `Search available hotel rooms and rates on ${hotelName} for given dates and guest count.`,
@@ -231,19 +291,229 @@ export class SynthesizerService {
         selectorsMapping: {},
       },
     ];
+  }
 
-    return {
-      serverId,
-      hotelName,
-      targetUrl: scan.url,
-      createdAt: new Date().toISOString(),
-      tools,
-      scanSummary: {
-        inputsDetected: scan.inputs.length,
-        buttonsDetected: scan.buttons.length,
-        roomsDetected: scan.detectedRooms.length,
-        screenshotPath: scan.screenshotPath,
+  /**
+   * Synthesizes generic web tools based on actual DOM inputs, routes, and buttons detected on non-hotel sites.
+   */
+  private synthesizeGenericTools(
+    scan: WebScanResult,
+    siteTitle: string,
+  ): MCPToolDefinition[] {
+    const tools: MCPToolDefinition[] = [];
+
+    // 1. Check if the site has a Login / Authentication form
+    const hasPasswordField = scan.inputs.some((i) => i.fieldType === 'password');
+    const hasExplicitLoginButton = scan.buttons.some((b) =>
+      ['log in', 'login', 'connexion', 'sign in', 'se connecter'].some((k) =>
+        b.text.toLowerCase().includes(k),
+      ),
+    );
+
+    if (hasPasswordField || hasExplicitLoginButton) {
+      const loginProps: Record<string, any> = {};
+      const loginSelectors: Record<string, string> = {};
+      const requiredProps: string[] = [];
+
+      const pwdField = scan.inputs.find((i) => i.fieldType === 'password');
+      const userField = scan.inputs.find(
+        (i) =>
+          i.fieldType !== 'password' &&
+          (i.fieldType === 'email' ||
+            ['user', 'username', 'login', 'email', 'identifiant'].some((k) =>
+              `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase().includes(k),
+            )),
+      );
+
+      if (userField) {
+        loginProps['identifier'] = {
+          type: 'string',
+          description: userField.label || userField.placeholder || 'Username or email',
+        };
+        loginSelectors['identifier'] =
+          userField.id && userField.id.startsWith('mantine-')
+            ? 'input[type="email"], input[type="text"]:not([type="hidden"])'
+            : userField.selector;
+        requiredProps.push('identifier');
+      }
+
+      if (pwdField) {
+        loginProps['password'] = {
+          type: 'string',
+          description: pwdField.label || 'Password',
+        };
+        loginSelectors['password'] =
+          pwdField.id && pwdField.id.startsWith('mantine-')
+            ? 'input[type="password"]'
+            : pwdField.selector;
+        requiredProps.push('password');
+      }
+
+      const loginBtn =
+        scan.buttons.find((b) =>
+          ['log in', 'login', 'connexion', 'sign in', 'connecter'].some((k) =>
+            b.text.toLowerCase().includes(k),
+          ),
+        ) || scan.buttons.find((b) => b.buttonType === 'submit') || scan.buttons[0];
+
+      if (loginBtn) {
+        loginSelectors['submit_button'] = loginBtn.selector;
+      }
+
+      if (Object.keys(loginProps).length > 0) {
+        tools.push({
+          name: 'login',
+          description: `Authenticate or log in to ${siteTitle}.`,
+          parameters: {
+            type: 'object',
+            properties: loginProps,
+            required: requiredProps,
+          },
+          executionStep: 'submit_form',
+          requires_confirmation: false,
+          is_irreversible: false,
+          selectorsMapping: loginSelectors,
+        });
+      }
+    }
+
+    // 2. Check if the site has a Newsletter / Subscribe form (e.g. BaselHack)
+    const isNewsletter =
+      !hasPasswordField &&
+      scan.inputs.some(
+        (i) => i.fieldType === 'email' || (i.name || '').toLowerCase().includes('email'),
+      ) &&
+      scan.buttons.some((b) =>
+        ['subscribe', 'newsletter', 'join', 'abonner', "s'inscrire"].some((k) =>
+          b.text.toLowerCase().includes(k),
+        ),
+      );
+
+    if (isNewsletter) {
+      const emailField = scan.inputs.find(
+        (i) => i.fieldType === 'email' || (i.name || '').toLowerCase().includes('email'),
+      );
+      const subscribeBtn = scan.buttons.find((b) =>
+        ['subscribe', 'newsletter', 'join', 'abonner', "s'inscrire"].some((k) =>
+          b.text.toLowerCase().includes(k),
+        ),
+      );
+
+      if (emailField) {
+        tools.push({
+          name: 'subscribe_newsletter',
+          description: `Subscribe to the newsletter or community announcements on ${siteTitle}.`,
+          parameters: {
+            type: 'object',
+            properties: {
+              email: {
+                type: 'string',
+                description: 'E-mail address for newsletter subscription',
+              },
+            },
+            required: ['email'],
+          },
+          executionStep: 'submit_form',
+          requires_confirmation: false,
+          is_irreversible: false,
+          selectorsMapping: {
+            email: emailField.selector,
+            submit_button: subscribeBtn ? subscribeBtn.selector : 'button[type="submit"]',
+          },
+        });
+      }
+    }
+
+    // 3. Navigation Routes Tool (e.g. /event, /challenges, /about, /sponsors on BaselHack)
+    if (scan.routes && scan.routes.length > 0) {
+      const routeList = scan.routes.map((r) => `${r.path} (${r.label})`).join(', ');
+      tools.push({
+        name: 'navigate_route',
+        description: `Navigate or inspect pages and sections of ${siteTitle}. Available routes: ${routeList}.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            route: {
+              type: 'string',
+              description: 'The internal route or page path to visit (e.g. /event, /challenges, /about)',
+              enum: scan.routes.map((r) => r.path),
+            },
+          },
+          required: ['route'],
+        },
+        executionStep: 'navigate_route',
+        requires_confirmation: false,
+        is_irreversible: false,
+        selectorsMapping: {},
+      });
+    }
+
+    // 4. Generic interaction / form submission tool for remaining inputs (excluding honeypots)
+    const otherInputs = scan.inputs.filter((i) => {
+      const idOrName = `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase();
+      return (
+        !idOrName.includes('honeypot') &&
+        !idOrName.includes('leave this field blank') &&
+        i.fieldType !== 'password' &&
+        !(isNewsletter && i.fieldType === 'email')
+      );
+    });
+
+    if (otherInputs.length > 0) {
+      const formProps: Record<string, any> = {};
+      const formSelectors: Record<string, string> = {};
+
+      otherInputs.slice(0, 8).forEach((f) => {
+        const key = this.fieldToParamKey(f);
+        formProps[key] = {
+          type: f.fieldType === 'number' ? 'number' : 'string',
+          description: f.label || f.placeholder || key,
+        };
+        formSelectors[key] = f.selector;
+      });
+
+      const submitBtn =
+        scan.buttons.find((b) => b.buttonType === 'submit') || scan.buttons[0];
+      if (submitBtn) {
+        formSelectors['submit_button'] = submitBtn.selector;
+      }
+
+      tools.push({
+        name: 'submit_data',
+        description: `Submit data or interact with form elements on ${siteTitle}.`,
+        parameters: {
+          type: 'object',
+          properties: formProps,
+        },
+        executionStep: 'submit_form',
+        requires_confirmation: true,
+        is_irreversible: true,
+        selectorsMapping: formSelectors,
+      });
+    }
+
+    // 5. Always provide get_current_status (universal tool)
+    tools.push({
+      name: 'get_current_status',
+      description: `Capture the current live webpage state and screenshot for ${siteTitle}.`,
+      parameters: {
+        type: 'object',
+        properties: {},
       },
-    };
+      executionStep: 'get_screenshot',
+      requires_confirmation: false,
+      is_irreversible: false,
+      selectorsMapping: {},
+    });
+
+    return tools;
+  }
+
+  private fieldToParamKey(f: FormField): string {
+    if (f.name) return this.cleanSlug(f.name);
+    if (f.id) return this.cleanSlug(f.id);
+    if (f.label) return this.cleanSlug(f.label);
+    if (f.placeholder) return this.cleanSlug(f.placeholder);
+    return `field_${f.fieldType || 'input'}`;
   }
 }

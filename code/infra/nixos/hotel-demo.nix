@@ -73,6 +73,10 @@ in
     };
   };
 
+  # The NAT does not loop back to the VM's own public IP, so the scanner has to
+  # reach this site through the local Caddy.
+  networking.hosts."127.0.0.1" = [ "hotel.bh2026.tekitup.net" ];
+
   services.caddy.virtualHosts."hotel.bh2026.tekitup.net".extraConfig = ''
     handle /api/* {
       reverse_proxy localhost:3001

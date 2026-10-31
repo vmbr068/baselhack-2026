@@ -37,7 +37,7 @@ The interface is in French by default. Switch languages with the control at the 
 
 ## Backend connection
 
-The Vite development server proxies `/api`, `/mock-hotel`, and `/static` to `http://localhost:3000` by default. Set `MCPEX_BACKEND_URL` when the backend runs elsewhere, for example:
+The Vite development server proxies `/api`, `/mock-hotel`, and `/static` to `https://api.bh2026.tekitup.net` by default. Set `MCPEX_BACKEND_URL` to use a local or alternate backend, for example:
 
 ```sh
 MCPEX_BACKEND_URL=http://localhost:3001 npm run dev

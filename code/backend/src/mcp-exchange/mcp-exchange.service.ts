@@ -9,6 +9,7 @@ import * as fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { McpCreatorService } from '../mcp-creator/mcp-creator.service.js';
 import type { MCPServerConfig } from '../mcp-creator/mcp-creator.types.js';
+import type { BusinessUser } from '../auth/auth.types.js';
 import type {
   ExchangeConnectionResponse,
   ExchangeEntry,
@@ -75,6 +76,7 @@ export class McpExchangeService implements OnModuleInit {
   async publish(
     serverId: string,
     description?: string,
+    publisher?: BusinessUser,
   ): Promise<PublishResponse> {
     const config = this.mcpCreator.getServer(serverId);
     // Snapshot so later enrichments of the live server don't mutate what was published
@@ -100,6 +102,11 @@ export class McpExchangeService implements OnModuleInit {
       version: nextVersion,
       publishedAt: new Date().toISOString(),
       description,
+      publishedBy: publisher && {
+        name: publisher.fullName,
+        email: publisher.email,
+        company: publisher.company,
+      },
       server: snapshot,
     });
     entry.siteTitle = snapshot.hotelName;
@@ -242,6 +249,9 @@ export class McpExchangeService implements OnModuleInit {
       version: v.version,
       published_at: v.publishedAt,
       description: v.description,
+      published_by: v.publishedBy
+        ? `${v.publishedBy.name} (${v.publishedBy.company})`
+        : undefined,
       server_id: v.server.serverId,
       tools: v.server.tools,
       call_endpoint: `/api/v1/servers/${v.server.serverId}/call`,

@@ -53,7 +53,7 @@ All routes are under `/api/v1/exchange` and visible in Swagger (`/docs`).
 
 | Route | What it does |
 | --- | --- |
-| `POST /mcps` | Publish a generated server: `{ "server_id": "…" \| "latest", "description?": "…" }`. Creates the entry or appends a version. |
+| `POST /mcps` | Publish a generated server: `{ "server_id": "…" \| "latest", "description?": "…" }`. Creates the entry or appends a version. Requires a business owner login (Bearer token). |
 | `GET /mcps` | List published MCPs as catalogue summaries, newest first. |
 | `GET /mcps?q=…` | Search by site (title, URL) or capability (tool names and descriptions of the latest version). |
 | `GET /mcps/{entryId}` | Detail: every version with its full tool list. |
@@ -83,8 +83,15 @@ curl -X POST localhost:3000/api/v1/generate \
 ```
 
 ```bash
+TOKEN=$(curl -s -X POST localhost:3000/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"owner@hotelbasel.ch","password":"basel2026"}' | jq -r .token)
+```
+
+```bash
 curl -X POST localhost:3000/api/v1/exchange/mcps \
   -H 'content-type: application/json' \
+  -H "authorization: Bearer $TOKEN" \
   -d '{"server_id":"latest","description":"Grand Hotel Basel booking"}'
 ```
 
@@ -107,7 +114,9 @@ every tool call is written to the audit trail).
 - Only sites we are authorised to automate are published (our own demo site);
   the scanner's domain allowlist applies to every tool call.
 - Published metadata contains fictitious data only.
-- Publishing will sit behind login once E6 wires it in; reading stays public.
+- Publishing requires a business owner login (the fictitious accounts seeded
+  by the auth module); the publisher is recorded in the version metadata.
+  Reading, searching and connecting stay public.
 
 ## Tests
 

@@ -31,8 +31,12 @@ describe('MCP Exchange agent connection (e2e)', () => {
     const generated = await request(app.getHttpServer())
       .post('/api/v1/generate')
       .send({ url: mockHotelFileUrl });
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'owner@hotelbasel.ch', password: 'basel2026' });
     const published = await request(app.getHttpServer())
       .post('/api/v1/exchange/mcps')
+      .set('Authorization', `Bearer ${login.body.token}`)
       .send({ server_id: generated.body.server_id });
     entryId = published.body.entry_id;
   }, 60000);

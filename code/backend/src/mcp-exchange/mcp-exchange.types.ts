@@ -7,6 +7,11 @@ export interface ExchangeVersion {
   version: number;
   publishedAt: string;
   description?: string;
+  publishedBy?: {
+    name: string;
+    email: string;
+    company: string;
+  };
   server: MCPServerConfig;
 }
 
@@ -22,6 +27,7 @@ export interface PublishedVersionSummary {
   version: number;
   published_at: string;
   description?: string;
+  published_by?: string;
   server_id: string;
   tools: MCPToolDefinition[];
   call_endpoint: string;

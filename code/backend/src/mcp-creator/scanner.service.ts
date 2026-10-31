@@ -12,6 +12,10 @@ import {
   ActionButton,
   ScannedRoomOption,
 } from './mcp-creator.types.js';
+import {
+  assertAllowedSite,
+  blockDisallowedNavigation,
+} from './site-allowlist.js';
 
 @Injectable()
 export class ScannerService {
@@ -30,6 +34,7 @@ export class ScannerService {
     headless = true,
     timeoutMs = 25000,
   ): Promise<WebScanResult> {
+    assertAllowedSite(url);
     this.logger.log(`Scanning website: ${url}`);
     const browser: Browser = await chromium.launch({
       headless,
@@ -40,6 +45,7 @@ export class ScannerService {
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     });
+    await blockDisallowedNavigation(context);
     const page = await context.newPage();
 
     try {

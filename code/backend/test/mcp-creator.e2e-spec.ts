@@ -57,6 +57,15 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.body.message).toContain('Cannot reach http://localhost:5173/');
   }, 30000);
 
+  it('/api/v1/generate (POST) should return 403 for an unauthorised site', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/generate')
+      .send({ url: 'https://example.com/' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.message).toContain('not an authorised site');
+  });
+
   it('/api/v1/servers/:id/call (POST) should execute check_availability via Playwright', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/servers/latest/call')
@@ -101,6 +110,14 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.body.namespaces).toContain('hotel/v1');
     expect(res.body.routes['/hotel/v1/availability']).toBeDefined();
     expect(res.body.routes['/hotel/v1/reserve']).toBeDefined();
+  });
+
+  it('/api/v1/servers/:id/enrich/wordpress (POST) should return 403 for an unauthorised site', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/servers/latest/enrich/wordpress')
+      .send({ wpUrl: 'https://example.com/wp-json' });
+
+    expect(res.status).toBe(403);
   });
 
   it('/api/v1/servers/:id/enrich/wordpress (POST) should handle invalid WP endpoint gracefully', async () => {

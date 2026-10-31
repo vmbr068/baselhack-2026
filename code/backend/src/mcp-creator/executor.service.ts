@@ -3,6 +3,10 @@ import { chromium, Browser } from 'playwright';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { MCPServerConfig, ToolCallResponse } from './mcp-creator.types.js';
+import {
+  assertAllowedSite,
+  blockDisallowedNavigation,
+} from './site-allowlist.js';
 
 @Injectable()
 export class ExecutorService {
@@ -32,8 +36,12 @@ export class ExecutorService {
       };
     }
 
+    // Servers persisted on disk may predate the allowlist, so check on every call.
+    assertAllowedSite(config.targetUrl);
+
     // Direct API Execution (if tool was enriched with a direct backend API endpoint)
     if (toolDef.apiEndpoint) {
+      assertAllowedSite(toolDef.apiEndpoint);
       try {
         this.logger.log(
           `Executing tool '${toolName}' via direct API: ${toolDef.apiMethod || 'POST'} ${toolDef.apiEndpoint}`,
@@ -56,6 +64,7 @@ export class ExecutorService {
             Accept: 'application/json',
           },
           body: !isGet ? JSON.stringify(args) : undefined,
+          redirect: 'error',
           signal: AbortSignal.timeout(6000),
         });
 
@@ -90,6 +99,7 @@ export class ExecutorService {
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     });
+    await blockDisallowedNavigation(context);
     const page = await context.newPage();
 
     try {

@@ -1,0 +1,13 @@
+# Every file in secrets/ is encrypted for each team member's PGP key.
+# To add someone: append their fingerprint, then run
+# `sops updatekeys secrets/<file>.yaml` on every secret.
+keys:
+  - &vmbr0 303208D04F9C177379481E2A41DB50B44C725B15
+  - &quentin 87F6F4B66D19727653B64649E79CCF343B972BE2
+
+creation_rules:
+  - path_regex: ^secrets/.*\.yaml$
+    key_groups:
+      - pgp:
+          - *vmbr0
+          - *quentin

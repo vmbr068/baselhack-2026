@@ -8,8 +8,8 @@ terraform {
     }
   }
 
-  # The state and saved plans are encrypted with a passphrase kept in
-  # secrets/tofu.yaml.
+  # The state is committed so the repository alone can redeploy the VM. It and
+  # saved plans are encrypted with a passphrase kept in secrets/tofu.yaml.
   encryption {
     key_provider "pbkdf2" "passphrase" {
       passphrase = var.state_passphrase

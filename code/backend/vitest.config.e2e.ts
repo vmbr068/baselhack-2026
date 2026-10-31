@@ -6,5 +6,8 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
+    env: {
+      ALLOWED_SITE_ORIGINS: 'file:,http://localhost:5173,http://127.0.0.1:9999',
+    },
   },
 });

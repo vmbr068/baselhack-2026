@@ -13,6 +13,11 @@
       url = "github:nlewo/comin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    hotel-demo = {
+      url = "github:agrand2004/hotel-website-demo";
+      flake = false;
+    };
   };
 
   outputs =
@@ -20,6 +25,7 @@
       nixpkgs,
       disko,
       comin,
+      hotel-demo,
       ...
     }:
     let
@@ -32,7 +38,10 @@
     {
       nixosConfigurations.${server.name} = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { inherit server; };
+        specialArgs = {
+          inherit server;
+          hotelDemoSrc = hotel-demo;
+        };
         modules = [
           disko.nixosModules.disko
           comin.nixosModules.comin
@@ -43,6 +52,7 @@
       packages.${system} = {
         backend = pkgs.callPackage ./nixos/backend-package.nix { };
         frontend = pkgs.callPackage ./nixos/frontend-package.nix { };
+        hotel-demo = pkgs.callPackage ./nixos/hotel-demo-package.nix { hotelDemoSrc = hotel-demo; };
       };
 
       devShells.${system}.default = pkgs.mkShell {

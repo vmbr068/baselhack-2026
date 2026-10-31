@@ -8,6 +8,10 @@ import {
   AuthSessionData,
 } from './mcp-creator.types.js';
 import { normalizeAuthSession } from './auth-session.helper.js';
+import {
+  assertAllowedSite,
+  blockDisallowedNavigation,
+} from './site-allowlist.js';
 
 @Injectable()
 export class ExecutorService {
@@ -49,6 +53,9 @@ export class ExecutorService {
         error: `Tool '${toolName}' not found in configuration for ${config.hotelName}`,
       };
     }
+
+    // Servers persisted on disk may predate the allowlist, so check on every call.
+    assertAllowedSite(config.targetUrl);
 
     const sessionToUse =
       authSessionOverride || args.auth_session || config.authSession;
@@ -149,6 +156,7 @@ export class ExecutorService {
 
     // Direct API Execution (if tool was enriched with a direct backend API endpoint)
     if (toolDef.apiEndpoint) {
+      assertAllowedSite(toolDef.apiEndpoint);
       try {
         this.logger.log(
           `Executing tool '${toolName}' via direct API: ${toolDef.apiMethod || 'POST'} ${toolDef.apiEndpoint}`,
@@ -179,6 +187,7 @@ export class ExecutorService {
           method,
           headers: apiHeaders,
           body: !isGet ? JSON.stringify(args) : undefined,
+          redirect: 'error',
           signal: AbortSignal.timeout(6000),
         });
 
@@ -216,6 +225,7 @@ export class ExecutorService {
       storageState,
       extraHTTPHeaders: extraHeaders,
     });
+    await blockDisallowedNavigation(context);
     const page = await context.newPage();
 
     try {

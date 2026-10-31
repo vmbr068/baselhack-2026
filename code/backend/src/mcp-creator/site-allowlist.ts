@@ -14,14 +14,17 @@ function allowedOrigins(): string[] {
 }
 
 function isAllowedUrl(url: URL): boolean {
+  const origins = allowedOrigins();
+  if (origins.includes('*')) return true;
   // file: URLs have no origin, so they are matched by protocol.
   const origin = url.protocol === 'file:' ? 'file:' : url.origin;
-  return allowedOrigins().includes(origin);
+  return origins.includes(origin);
 }
 
 /**
  * Rejects any site we are not authorised to automate (AGENTS.md section 4).
- * Set ALLOWED_SITE_ORIGINS to a comma-separated list to override the defaults.
+ * Set ALLOWED_SITE_ORIGINS to a comma-separated list to override the defaults,
+ * or to '*' to disable the check while debugging locally.
  */
 export function assertAllowedSite(rawUrl: string): void {
   let url: URL;

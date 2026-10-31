@@ -123,21 +123,39 @@ export class GithubEnricherService {
       }
     }
 
-    // 3. Scan codebase files for routes and models
+    // 3. Scan codebase files for routes and models (prioritize route and app definition files)
     const relevantCodeFiles = treeItems
       .filter((item) => {
         if (item.type !== 'blob') return false;
         const p = item.path.toLowerCase();
         return (
-          p.includes('route') ||
-          p.includes('controller') ||
-          p.includes('booking') ||
-          p.includes('hotel') ||
-          p.includes('reservation') ||
-          p.includes('api') ||
-          p.endsWith('.prisma') ||
-          p.endsWith('schema.sql')
+          (p.endsWith('.ts') ||
+            p.endsWith('.js') ||
+            p.endsWith('.json') ||
+            p.endsWith('.yaml') ||
+            p.endsWith('.yml')) &&
+          (p.includes('route') ||
+            p.includes('controller') ||
+            p.includes('booking') ||
+            p.includes('hotel') ||
+            p.includes('room') ||
+            p.includes('reservation') ||
+            p.includes('app.ts') ||
+            p.includes('app.js') ||
+            p.includes('api'))
         );
+      })
+      .sort((a, b) => {
+        const score = (p: string) => {
+          let s = 0;
+          if (p.includes('app.ts') || p.includes('app.js')) s += 15;
+          if (p.includes('route') || p.includes('routes')) s += 12;
+          if (p.includes('rooms') || p.includes('booking')) s += 8;
+          if (p.includes('controller')) s += 6;
+          if (p.includes('test') || p.includes('migration')) s -= 10;
+          return s;
+        };
+        return score(b.path.toLowerCase()) - score(a.path.toLowerCase());
       })
       .slice(0, 15);
 
@@ -147,7 +165,10 @@ export class GithubEnricherService {
       method: string;
     }> = [];
 
-    for (const fileItem of relevantCodeFiles.slice(0, 5)) {
+    let roomsApiRoute: string | null = null;
+    let bookingsApiRoute: string | null = null;
+
+    for (const fileItem of relevantCodeFiles.slice(0, 10)) {
       try {
         const rawRes = await fetch(
           `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${fileItem.path}`,
@@ -156,9 +177,9 @@ export class GithubEnricherService {
         if (rawRes.ok) {
           const code = await rawRes.text();
 
-          // Regex for NestJS / Express / FastAPI / WordPress routes
+          // Regex for NestJS / Express / FastAPI / Hono / WordPress routes
           const routeRegex =
-            /(?:@Post|@Get|app\.post|app\.get|register_rest_route|@router\.post|@router\.get)\s*\(\s*['"]([^'"]+)['"]/g;
+            /(?:@Post|@Get|app\.post|app\.get|app\.route|router\.post|router\.get|\.get|\.post|register_rest_route|@router\.post|@router\.get)\s*\(\s*['"]([^'"]+)['"]/g;
           let match: RegExpExecArray | null;
           while ((match = routeRegex.exec(code)) !== null) {
             const routeStr = match[1];
@@ -180,32 +201,64 @@ export class GithubEnricherService {
                 detectedRoute: routeStr,
                 method,
               });
+
+              if (routeStr.includes('room') && !roomsApiRoute) {
+                roomsApiRoute = routeStr.startsWith('/')
+                  ? routeStr
+                  : `/${routeStr}`;
+              }
+              if (
+                (routeStr.includes('book') || routeStr.includes('reserve')) &&
+                !bookingsApiRoute
+              ) {
+                bookingsApiRoute = routeStr.startsWith('/')
+                  ? routeStr
+                  : `/${routeStr}`;
+              }
             }
           }
         }
       } catch {}
     }
 
-    // 4. Merge & Upgrade tools
+    // Default to /api/rooms and /api/bookings if code files hinted at them
+    if (
+      !roomsApiRoute &&
+      relevantCodeFiles.some((f) => f.path.includes('rooms'))
+    ) {
+      roomsApiRoute = '/api/rooms';
+    }
+    if (
+      !bookingsApiRoute &&
+      relevantCodeFiles.some((f) => f.path.includes('booking'))
+    ) {
+      bookingsApiRoute = '/api/bookings';
+    }
+
+    const targetOrigin = new URL(config.targetUrl).origin;
+
+    // 4. Merge & Upgrade tools with direct backend API endpoints
     const updatedTools = [...config.tools];
 
     // Enrich existing check_availability and reserve_room
     for (const tool of updatedTools) {
-      if (
-        tool.name === 'check_availability' &&
-        (parsedOpenApiTools.length > 0 || discoveredCodeEndpoints.length > 0)
-      ) {
-        tool.description = `${tool.description} (Enriched with GitHub codebase analysis from ${owner}/${repo})`;
+      if (tool.name === 'check_availability') {
+        tool.description = `${tool.description} (Enriched with GitHub codebase API analysis from ${owner}/${repo})`;
         tool.sourceOrigin = 'github';
         tool.executionMode = 'hybrid';
+        if (roomsApiRoute) {
+          tool.apiEndpoint = `${targetOrigin}${roomsApiRoute}`;
+          tool.apiMethod = 'GET';
+        }
       }
-      if (
-        tool.name === 'reserve_room' &&
-        (parsedOpenApiTools.length > 0 || discoveredCodeEndpoints.length > 0)
-      ) {
-        tool.description = `${tool.description} (Enriched with GitHub codebase analysis from ${owner}/${repo})`;
+      if (tool.name === 'reserve_room') {
+        tool.description = `${tool.description} (Enriched with GitHub codebase API analysis from ${owner}/${repo})`;
         tool.sourceOrigin = 'github';
         tool.executionMode = 'hybrid';
+        if (bookingsApiRoute) {
+          tool.apiEndpoint = `${targetOrigin}${bookingsApiRoute}`;
+          tool.apiMethod = 'POST';
+        }
       }
     }
 

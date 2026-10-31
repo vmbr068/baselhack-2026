@@ -5,12 +5,15 @@ import {
   Body,
   Param,
   Query,
+  Req,
   ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { McpExchangeService } from './mcp-exchange.service.js';
 import { PublishRequestDto } from './mcp-exchange.dto.js';
 import type {
+  ExchangeConnectionResponse,
   ExchangeEntrySummary,
   ExchangeVersionResponse,
   PublishResponse,
@@ -65,5 +68,23 @@ export class McpExchangeController {
     @Param('version', ParseIntPipe) version: number,
   ): ExchangeVersionResponse {
     return this.mcpExchangeService.getVersion(entryId, version);
+  }
+
+  @ApiOperation({
+    summary:
+      'Get the connection details of a published version: MCP SSE endpoint, stdio bridge command and ready-to-paste Claude configuration',
+  })
+  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({ name: 'version', example: 1 })
+  @Get('mcps/:entryId/versions/:version/connection')
+  getMcpConnection(
+    @Param('entryId') entryId: string,
+    @Param('version', ParseIntPipe) version: number,
+    @Req() req: Request,
+  ): ExchangeConnectionResponse {
+    const baseUrl =
+      process.env.PUBLIC_BASE_URL ||
+      `${req.protocol}://${req.get('host') ?? `localhost:${process.env.PORT ?? 3000}`}`;
+    return this.mcpExchangeService.getConnection(entryId, version, baseUrl);
   }
 }

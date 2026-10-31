@@ -51,3 +51,23 @@ export interface ExchangeVersionResponse extends PublishedVersionSummary {
   source_url: string;
   site_title: string;
 }
+
+export interface ExchangeConnectionResponse {
+  entry_id: string;
+  version: number;
+  server_id: string;
+  site_title: string;
+  available: boolean;
+  transports: {
+    sse_url: string;
+    messages_url: string;
+    stdio: {
+      command: string;
+      args: string[];
+      env: Record<string, string>;
+    };
+  };
+  claude_config: {
+    mcpServers: Record<string, { type: 'sse'; url: string }>;
+  };
+}

@@ -445,7 +445,45 @@ export class ExecutorService {
         };
       }
 
-      // 4. screenshot only
+      // 4. navigate_route (visit internal route, capture content preview & screenshot)
+      if (toolDef.executionStep === 'navigate_route') {
+        const targetPath = args.route || args.path || '/';
+        const targetFullUrl = new URL(targetPath, config.targetUrl).href;
+        assertAllowedSite(targetFullUrl);
+        await page.goto(targetFullUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 25000,
+        });
+        await this.settle(page);
+
+        const pageTitle = await page.title();
+        const mainText = await page.evaluate(() => {
+          const main = document.querySelector(
+            'main, article, #content, .content, body',
+          );
+          return (main ? (main as HTMLElement).innerText : document.body.innerText)
+            .replace(/\s+/g, ' ')
+            .slice(0, 1500);
+        });
+
+        const filename = `nav_${Date.now()}.png`;
+        await page.screenshot({ path: path.join(this.screenshotDir, filename) });
+
+        return {
+          tool_name: toolName,
+          success: true,
+          status: 'executed',
+          data: {
+            title: pageTitle,
+            route: targetPath,
+            url: targetFullUrl,
+            content_preview: mainText,
+          },
+          screenshot_url: `/static/screenshots/${filename}`,
+        };
+      }
+
+      // 5. screenshot only
       const filename = `screenshot_${Date.now()}.png`;
       await page.screenshot({ path: path.join(this.screenshotDir, filename) });
       return {

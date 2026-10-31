@@ -293,7 +293,7 @@ export class SynthesizerService {
   }
 
   /**
-   * Synthesizes generic web tools based on actual DOM inputs and buttons detected on non-hotel sites.
+   * Synthesizes generic web tools based on actual DOM inputs, routes, and buttons detected on non-hotel sites.
    */
   private synthesizeGenericTools(
     scan: WebScanResult,
@@ -301,38 +301,53 @@ export class SynthesizerService {
   ): MCPToolDefinition[] {
     const tools: MCPToolDefinition[] = [];
 
-    // 1. If login / credentials form fields are detected
-    const hasLoginFields = scan.inputs.some(
-      (i) =>
-        i.fieldType === 'password' ||
-        ['user', 'username', 'login', 'email', 'identifiant'].some((k) =>
-          `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase().includes(k),
-        ),
+    // 1. Check if the site has a Login / Authentication form
+    const hasPasswordField = scan.inputs.some((i) => i.fieldType === 'password');
+    const hasExplicitLoginButton = scan.buttons.some((b) =>
+      ['log in', 'login', 'connexion', 'sign in', 'se connecter'].some((k) =>
+        b.text.toLowerCase().includes(k),
+      ),
     );
 
-    if (hasLoginFields) {
+    if (hasPasswordField || hasExplicitLoginButton) {
       const loginProps: Record<string, any> = {};
       const loginSelectors: Record<string, string> = {};
       const requiredProps: string[] = [];
 
-      for (const f of scan.inputs) {
-        const key = this.fieldToParamKey(f);
-        if (
-          f.fieldType === 'password' ||
-          ['user', 'username', 'login', 'email', 'identifiant', 'identifier'].some((k) =>
-            key.toLowerCase().includes(k) || (f.id || '').toLowerCase().includes(k),
-          )
-        ) {
-          loginProps[key] = {
-            type: 'string',
-            description: f.label || f.placeholder || key,
-          };
-          loginSelectors[key] = f.selector;
-          requiredProps.push(key);
-        }
+      const pwdField = scan.inputs.find((i) => i.fieldType === 'password');
+      const userField = scan.inputs.find(
+        (i) =>
+          i.fieldType !== 'password' &&
+          (i.fieldType === 'email' ||
+            ['user', 'username', 'login', 'email', 'identifiant'].some((k) =>
+              `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase().includes(k),
+            )),
+      );
+
+      if (userField) {
+        loginProps['identifier'] = {
+          type: 'string',
+          description: userField.label || userField.placeholder || 'Username or email',
+        };
+        loginSelectors['identifier'] =
+          userField.id && userField.id.startsWith('mantine-')
+            ? 'input[type="email"], input[type="text"]:not([type="hidden"])'
+            : userField.selector;
+        requiredProps.push('identifier');
       }
 
-      // Find submit or log in button
+      if (pwdField) {
+        loginProps['password'] = {
+          type: 'string',
+          description: pwdField.label || 'Password',
+        };
+        loginSelectors['password'] =
+          pwdField.id && pwdField.id.startsWith('mantine-')
+            ? 'input[type="password"]'
+            : pwdField.selector;
+        requiredProps.push('password');
+      }
+
       const loginBtn =
         scan.buttons.find((b) =>
           ['log in', 'login', 'connexion', 'sign in', 'connecter'].some((k) =>
@@ -361,20 +376,93 @@ export class SynthesizerService {
       }
     }
 
-    // 2. Generic interaction / form submission tool if other inputs exist
-    const nonLoginInputs = scan.inputs.filter(
-      (i) =>
-        i.fieldType !== 'password' &&
-        !['login', 'password', 'user'].some((k) =>
-          `${i.id || ''} ${i.name || ''}`.toLowerCase().includes(k),
+    // 2. Check if the site has a Newsletter / Subscribe form (e.g. BaselHack)
+    const isNewsletter =
+      !hasPasswordField &&
+      scan.inputs.some(
+        (i) => i.fieldType === 'email' || (i.name || '').toLowerCase().includes('email'),
+      ) &&
+      scan.buttons.some((b) =>
+        ['subscribe', 'newsletter', 'join', 'abonner', "s'inscrire"].some((k) =>
+          b.text.toLowerCase().includes(k),
         ),
-    );
+      );
 
-    if (nonLoginInputs.length > 0) {
+    if (isNewsletter) {
+      const emailField = scan.inputs.find(
+        (i) => i.fieldType === 'email' || (i.name || '').toLowerCase().includes('email'),
+      );
+      const subscribeBtn = scan.buttons.find((b) =>
+        ['subscribe', 'newsletter', 'join', 'abonner', "s'inscrire"].some((k) =>
+          b.text.toLowerCase().includes(k),
+        ),
+      );
+
+      if (emailField) {
+        tools.push({
+          name: 'subscribe_newsletter',
+          description: `Subscribe to the newsletter or community announcements on ${siteTitle}.`,
+          parameters: {
+            type: 'object',
+            properties: {
+              email: {
+                type: 'string',
+                description: 'E-mail address for newsletter subscription',
+              },
+            },
+            required: ['email'],
+          },
+          executionStep: 'submit_form',
+          requires_confirmation: false,
+          is_irreversible: false,
+          selectorsMapping: {
+            email: emailField.selector,
+            submit_button: subscribeBtn ? subscribeBtn.selector : 'button[type="submit"]',
+          },
+        });
+      }
+    }
+
+    // 3. Navigation Routes Tool (e.g. /event, /challenges, /about, /sponsors on BaselHack)
+    if (scan.routes && scan.routes.length > 0) {
+      const routeList = scan.routes.map((r) => `${r.path} (${r.label})`).join(', ');
+      tools.push({
+        name: 'navigate_route',
+        description: `Navigate or inspect pages and sections of ${siteTitle}. Available routes: ${routeList}.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            route: {
+              type: 'string',
+              description: 'The internal route or page path to visit (e.g. /event, /challenges, /about)',
+              enum: scan.routes.map((r) => r.path),
+            },
+          },
+          required: ['route'],
+        },
+        executionStep: 'navigate_route',
+        requires_confirmation: false,
+        is_irreversible: false,
+        selectorsMapping: {},
+      });
+    }
+
+    // 4. Generic interaction / form submission tool for remaining inputs (excluding honeypots)
+    const otherInputs = scan.inputs.filter((i) => {
+      const idOrName = `${i.id || ''} ${i.name || ''} ${i.label || ''}`.toLowerCase();
+      return (
+        !idOrName.includes('honeypot') &&
+        !idOrName.includes('leave this field blank') &&
+        i.fieldType !== 'password' &&
+        !(isNewsletter && i.fieldType === 'email')
+      );
+    });
+
+    if (otherInputs.length > 0) {
       const formProps: Record<string, any> = {};
       const formSelectors: Record<string, string> = {};
 
-      nonLoginInputs.slice(0, 10).forEach((f) => {
+      otherInputs.slice(0, 8).forEach((f) => {
         const key = this.fieldToParamKey(f);
         formProps[key] = {
           type: f.fieldType === 'number' ? 'number' : 'string',
@@ -403,7 +491,7 @@ export class SynthesizerService {
       });
     }
 
-    // Always provide get_current_status (universal tool)
+    // 5. Always provide get_current_status (universal tool)
     tools.push({
       name: 'get_current_status',
       description: `Capture the current live webpage state and screenshot for ${siteTitle}.`,

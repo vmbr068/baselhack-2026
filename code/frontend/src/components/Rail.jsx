@@ -35,6 +35,7 @@ export default function Rail({
           onClick={() => setPage('home')}
           title={t.home}
           aria-label={t.home}
+          aria-current={activePage === 'home' ? 'page' : undefined}
         >
           <IconHome size={22} />
           {isExpanded && <span className="rail-item-label">{t.home}</span>}
@@ -46,6 +47,7 @@ export default function Rail({
           onClick={() => setPage('servers')}
           title={t.myMcps}
           aria-label={t.myMcps}
+          aria-current={activePage === 'servers' ? 'page' : undefined}
         >
           <IconServers size={22} />
           {isExpanded && <span className="rail-item-label">{t.myMcps}</span>}

@@ -90,6 +90,14 @@ export const translations = {
     toastServerDataCurrent: 'Data is up to date',
     toastEnrichSuccess: (source) => `MCP enriched from ${source}!`,
     toastServerState: (enabled) => `Server ${enabled ? 'enabled' : 'disabled'}`,
+
+    // Pagination & Loading
+    paginationPrev: 'Previous',
+    paginationNext: 'Next',
+    paginationRange: (from, to, total) => `${from}–${to} of ${total} servers`,
+    retry: 'Retry',
+    loadingServers: 'Loading MCP servers...',
+    errorLoadingServers: 'Unable to load MCP servers.',
   },
 
   fr: {
@@ -183,5 +191,13 @@ export const translations = {
     toastServerDataCurrent: 'Données à jour',
     toastEnrichSuccess: (source) => `MCP enrichi depuis ${source} !`,
     toastServerState: (enabled) => `Serveur ${enabled ? 'activé' : 'désactivé'}`,
+
+    // Pagination & Loading
+    paginationPrev: 'Précédent',
+    paginationNext: 'Suivant',
+    paginationRange: (from, to, total) => `${from}–${to} sur ${total} serveurs`,
+    retry: 'Réessayer',
+    loadingServers: 'Chargement des serveurs MCP...',
+    errorLoadingServers: 'Impossible de charger les serveurs MCP.',
   },
 }

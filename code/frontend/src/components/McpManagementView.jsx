@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react'
+import React, { useRef, useState, useMemo } from 'react'
 import {
   IconSearch,
   IconPlus,
-  IconExternalLink,
   IconCopy,
   IconCheck,
-  IconLightning,
+  IconExternalLink,
   IconServers,
 } from './Icons'
+
+const PAGE_SIZE = 12
 
 // Multi-tiered website preview component (Backend screenshot -> Thum.io CDN -> Microlink -> Rich Adobe fallback)
 function WebsiteCardPreview({ server, hostname, isLocal }) {
@@ -115,38 +116,95 @@ function WebsiteCardPreview({ server, hostname, isLocal }) {
   )
 }
 
+// Every page when there are few, otherwise the first, the last and the neighbours.
+function visiblePages(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = [1, current - 1, current, current + 1, total]
+    .filter((page, i, all) => page >= 1 && page <= total && all.indexOf(page) === i)
+    .sort((a, b) => a - b)
+  return pages.flatMap((page, i) =>
+    i > 0 && page - pages[i - 1] > 1 ? [`gap-${page}`, page] : [page]
+  )
+}
+
+function siteLink(url) {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'file:') return { label: 'Local file', href: null }
+    return { label: parsed.host, href: url }
+  } catch {
+    return { label: url, href: null }
+  }
+}
+
+function formatDate(value, language = 'en') {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US'
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 export default function McpManagementView({
-  servers,
+  servers = [],
+  loading = false,
+  error = null,
+  onRetry,
   onSelectServer,
   onToggleServer,
   onNewMcp,
   onCopyEndpoint,
   copiedId,
+  language = 'en',
   t,
 }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'disabled'
+  const [page, setPage] = useState(1)
+  const viewRef = useRef(null)
 
-  // Filtered servers list
+  // Filtered servers list sorted by createdAt descending
   const filteredServers = useMemo(() => {
-    return servers.filter((server) => {
-      const matchesSearch =
-        (server.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (server.url || '').toLowerCase().includes(search.toLowerCase()) ||
-        (server.source || '').toLowerCase().includes(search.toLowerCase())
+    return servers
+      .filter((server) => {
+        const matchesSearch =
+          (server.name || '').toLowerCase().includes(search.toLowerCase()) ||
+          (server.url || '').toLowerCase().includes(search.toLowerCase()) ||
+          (server.source || '').toLowerCase().includes(search.toLowerCase())
 
-      const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'active' && server.enabled !== false) ||
-        (statusFilter === 'disabled' && server.enabled === false)
+        const matchesStatus =
+          statusFilter === 'all' ||
+          (statusFilter === 'active' && server.enabled !== false) ||
+          (statusFilter === 'disabled' && server.enabled === false)
 
-      return matchesSearch && matchesStatus
-    })
+        return matchesSearch && matchesStatus
+      })
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
   }, [servers, search, statusFilter])
 
+  const totalPages = Math.max(1, Math.ceil(filteredServers.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const firstIndex = (currentPage - 1) * PAGE_SIZE
+  const pageServers = filteredServers.slice(firstIndex, firstIndex + PAGE_SIZE)
+
+  const changeFilter = (nextFilter) => {
+    setStatusFilter(nextFilter)
+    setPage(1)
+  }
+
+  const goToPage = (nextPage) => {
+    setPage(nextPage)
+    viewRef.current?.closest('.adobe-canvas-content')?.scrollTo({ top: 0 })
+  }
+
   return (
-    <div className="mcp-management-view">
-      {/* Header Toolbar */}
+    <div className="mcp-management-view" ref={viewRef}>
+      {/* Header */}
       <div className="management-header">
         <div className="management-title-group">
           <span className="management-eyebrow">{t.managementEyebrow}</span>
@@ -162,8 +220,12 @@ export default function McpManagementView({
               type="text"
               className="mcp-search-input"
               placeholder={t.searchPlaceholder}
+              aria-label={t.searchPlaceholder}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
             />
           </div>
 
@@ -172,21 +234,21 @@ export default function McpManagementView({
             <button
               type="button"
               className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('all')}
+              onClick={() => changeFilter('all')}
             >
               {t.filterAll} ({servers.length})
             </button>
             <button
               type="button"
               className={`filter-pill ${statusFilter === 'active' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('active')}
+              onClick={() => changeFilter('active')}
             >
               {t.filterActive} ({servers.filter((s) => s.enabled !== false).length})
             </button>
             <button
               type="button"
               className={`filter-pill ${statusFilter === 'disabled' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('disabled')}
+              onClick={() => changeFilter('disabled')}
             >
               {t.filterDisabled} ({servers.filter((s) => s.enabled === false).length})
             </button>
@@ -202,17 +264,11 @@ export default function McpManagementView({
 
       {/* Cards Grid */}
       <div className="mcp-cards-grid">
-        {filteredServers.map((server) => {
-          let hostname = ''
-          let isLocal = false
-          try {
-            const parsed = new URL(server.url)
-            hostname = parsed.hostname
-            isLocal = ['localhost', '127.0.0.1'].includes(hostname)
-          } catch {
-            hostname = server.url
-          }
-
+        {pageServers.map((server) => {
+          const enabled = server.enabled !== false
+          const site = siteLink(server.url)
+          const created = formatDate(server.createdAt, language)
+          const isLocal = site.href === null || site.href.includes('localhost') || site.href.includes('127.0.0.1')
           const activeRoutesCount = (server.tools || []).filter(
             (t) => t.enabled !== false
           ).length
@@ -220,12 +276,12 @@ export default function McpManagementView({
           return (
             <div
               key={server.id}
-              className={`mcp-card ${server.enabled === false ? 'disabled' : ''}`}
+              className={`mcp-card ${enabled ? '' : 'disabled'}`}
             >
-              {/* Site Preview Thumbnail Header */}
+              {/* Site Preview Mock-Browser on Top */}
               <WebsiteCardPreview
                 server={server}
-                hostname={hostname}
+                hostname={site.label}
                 isLocal={isLocal}
               />
 
@@ -236,62 +292,48 @@ export default function McpManagementView({
                     <span className="mcp-card-name" title={server.name}>
                       {server.name}
                     </span>
-                    <a
-                      href={server.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mcp-card-url-link"
-                    >
-                      <span>{hostname || server.url}</span>
-                      <IconExternalLink size={12} />
-                    </a>
+                    {site.href ? (
+                      <a
+                        href={site.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mcp-card-site"
+                        title={server.url}
+                      >
+                        {site.label}
+                      </a>
+                    ) : (
+                      <span className="mcp-card-site" title={server.url}>
+                        {site.label}
+                      </span>
+                    )}
                   </div>
 
                   {/* Switch to enable/disable server */}
                   <label
                     className="custom-switch"
-                    title={server.enabled !== false ? t.statusDisabled : t.statusActive}
+                    title={enabled ? t.statusDisabled : t.statusActive}
                   >
                     <input
                       type="checkbox"
-                      checked={server.enabled !== false}
+                      aria-label={`Toggle ${server.name}`}
+                      checked={enabled}
                       onChange={(e) => onToggleServer(server, e.target.checked)}
                     />
                     <span className="custom-switch-slider" />
                   </label>
                 </div>
 
-                {/* Badges Row */}
-                <div className="mcp-card-tags-row">
-                  <span
-                    className={`status-indicator-badge ${
-                      server.enabled !== false ? 'active' : 'disabled'
-                    }`}
-                  >
-                    <span className="status-dot-pulse" />
-                    <span>{server.enabled !== false ? t.statusActive : t.statusDisabled}</span>
+                {/* Metadata Row */}
+                <div className="mcp-card-meta">
+                  <span className={`mcp-card-status ${enabled ? 'active' : ''}`}>
+                    {enabled ? t.statusActive : t.statusDisabled}
                   </span>
-
-                  <span
-                    className={`source-badge ${
-                      server.source === 'GitHub'
-                        ? 'github'
-                        : server.source === 'WordPress'
-                        ? 'wordpress'
-                        : ''
-                    }`}
-                  >
-                    {server.source === 'GitHub'
-                      ? `🐙 ${t.sourceGithub}`
-                      : server.source === 'WordPress'
-                      ? `🌐 ${t.sourceWordpress}`
-                      : `🔗 ${t.sourceWebsite}`}
-                  </span>
-
-                  <span className="routes-metric-badge">
-                    <IconLightning size={13} />
-                    <span>{t.routesMetric(activeRoutesCount)}</span>
-                  </span>
+                  <span>{t.routesMetric(activeRoutesCount)}</span>
+                  {server.source && server.source !== 'Website' && (
+                    <span className="source-tag">{server.source}</span>
+                  )}
+                  {created && <span className="mcp-card-date">{created}</span>}
                 </div>
 
                 {/* Card Actions Bottom */}
@@ -324,8 +366,26 @@ export default function McpManagementView({
           )
         })}
 
+        {/* Loading State */}
+        {loading && servers.length === 0 && (
+          <div className="mcp-empty-state" role="status">
+            <div className="radar-spinner" />
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t.loadingServers}</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="mcp-load-error" role="alert">
+            <span>{t.errorLoadingServers} {error}</span>
+            <button type="button" className="suggestion-chip" onClick={onRetry}>
+              {t.retry}
+            </button>
+          </div>
+        )}
+
         {/* Empty State */}
-        {filteredServers.length === 0 && (
+        {!loading && !error && filteredServers.length === 0 && (
           <div className="mcp-empty-state">
             <div className="empty-state-icon">
               <IconServers size={32} />
@@ -334,22 +394,69 @@ export default function McpManagementView({
               {t.emptyTitle}
             </h3>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 360 }}>
-              {search
+              {servers.length === 0
+                ? t.emptyNoServers
+                : search
                 ? t.emptySearch(search)
-                : t.emptyNoServers}
+                : t.emptyTitle}
             </p>
-            <button
-              type="button"
-              className="pill-submit-btn"
-              style={{ height: 40, fontSize: 13, marginTop: 8 }}
-              onClick={onNewMcp}
-            >
-              <IconPlus size={16} />
-              <span>{t.connectFirstSite}</span>
-            </button>
+            {servers.length === 0 && (
+              <button
+                type="button"
+                className="pill-submit-btn"
+                style={{ height: 40, fontSize: 13, width: 'auto', marginTop: 8 }}
+                onClick={onNewMcp}
+              >
+                <IconPlus size={16} />
+                <span>{t.connectFirstSite}</span>
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <nav className="pagination" aria-label="Pagination">
+          <span className="pagination-range">
+            {t.paginationRange(firstIndex + 1, firstIndex + pageServers.length, filteredServers.length)}
+          </span>
+          <div className="pagination-pages">
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={currentPage === 1}
+              onClick={() => goToPage(currentPage - 1)}
+            >
+              {t.paginationPrev}
+            </button>
+            {visiblePages(currentPage, totalPages).map((item) =>
+              typeof item === 'number' ? (
+                <button
+                  key={item}
+                  type="button"
+                  className={`pagination-btn ${item === currentPage ? 'active' : ''}`}
+                  aria-label={`Page ${item}`}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  onClick={() => goToPage(item)}
+                >
+                  {item}
+                </button>
+              ) : (
+                <span key={item} className="pagination-gap">…</span>
+              )
+            )}
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => goToPage(currentPage + 1)}
+            >
+              {t.paginationNext}
+            </button>
+          </div>
+        </nav>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   AdobeLogo,
   IconHelp,
@@ -17,10 +17,33 @@ export default function Header({
   setLanguage,
   onNavigateHome,
   notifications = [],
+  currentUser,
+  onNavigate,
   t,
 }) {
-  const [showHelp, setShowHelp] = useState(false)
-  const [showNotifications, setShowNotifications] = useState(false)
+  const [openPopover, setOpenPopover] = useState(null) // 'help' | 'notifications' | 'profile'
+  const headerRef = useRef(null)
+  const showHelp = openPopover === 'help'
+  const showNotifications = openPopover === 'notifications'
+  const showProfile = openPopover === 'profile'
+  const togglePopover = (name) => setOpenPopover((current) => (current === name ? null : name))
+  const closePopover = () => setOpenPopover(null)
+
+  useEffect(() => {
+    if (!openPopover) return undefined
+    const handlePointerDown = (e) => {
+      if (!headerRef.current?.contains(e.target)) closePopover()
+    }
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') closePopover()
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openPopover])
 
   const toggleTheme = () => {
     setColorScheme(prev => (prev === 'dark' ? 'light' : 'dark'))
@@ -31,7 +54,7 @@ export default function Header({
   }
 
   return (
-    <header className="adobe-header">
+    <header className="adobe-header" ref={headerRef}>
       <div className="adobe-header-left">
         <button
           className="adobe-logo-btn"
@@ -57,12 +80,9 @@ export default function Header({
         {/* Help Button */}
         <button
           className={`header-icon-btn ${showHelp ? 'active' : ''}`}
-          onClick={() => {
-            setShowHelp(!showHelp)
-            setShowNotifications(false)
-          }}
+          onClick={() => togglePopover('help')}
           title={t.helpTitle}
-          aria-label="Help"
+          aria-label={t.helpTitle}
         >
           <IconHelp size={20} />
         </button>
@@ -70,12 +90,9 @@ export default function Header({
         {/* Notifications Button */}
         <button
           className={`header-icon-btn ${showNotifications ? 'active' : ''}`}
-          onClick={() => {
-            setShowNotifications(!showNotifications)
-            setShowHelp(false)
-          }}
+          onClick={() => togglePopover('notifications')}
           title={t.notificationsTitle}
-          aria-label="Notifications"
+          aria-label={t.notificationsTitle}
         >
           <IconBell size={20} />
           {notifications.length > 0 && <span className="notification-dot" />}
@@ -94,9 +111,10 @@ export default function Header({
 
         {/* Profile Avatar */}
         <button
-          className="profile-avatar-btn"
-          title="Alex Laurent"
-          aria-label="User Profile"
+          className={`profile-avatar-btn ${showProfile ? 'active' : ''}`}
+          onClick={() => togglePopover('profile')}
+          title={currentUser?.name || currentUser?.email || 'Compte'}
+          aria-label="Compte utilisateur"
         >
           <IconUser size={18} />
         </button>
@@ -108,7 +126,9 @@ export default function Header({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="popover-title">{t.helpTitle}</span>
             <button
-              onClick={() => setShowHelp(false)}
+              type="button"
+              aria-label="Fermer"
+              onClick={closePopover}
               className="header-icon-btn"
               style={{ width: 28, height: 28 }}
             >
@@ -130,7 +150,9 @@ export default function Header({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="popover-title">{t.notificationsTitle}</span>
             <button
-              onClick={() => setShowNotifications(false)}
+              type="button"
+              aria-label="Fermer"
+              onClick={closePopover}
               className="header-icon-btn"
               style={{ width: 28, height: 28 }}
             >
@@ -150,6 +172,27 @@ export default function Header({
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Profile Popover */}
+      {showProfile && (
+        <div className="adobe-popover" role="dialog" aria-label="Compte">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="popover-title">{currentUser?.name || 'Compte'}</span>
+            <button
+              type="button"
+              aria-label="Fermer"
+              onClick={closePopover}
+              className="header-icon-btn"
+              style={{ width: 28, height: 28 }}
+            >
+              <IconClose size={16} />
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', overflowWrap: 'anywhere' }}>
+            {currentUser ? currentUser.email : (language === 'fr' ? 'Vous n’êtes pas connecté.' : 'You are not signed in.')}
+          </p>
         </div>
       )}
     </header>

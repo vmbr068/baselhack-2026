@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Header from './components/Header'
 import Rail from './components/Rail'
 import ConnectView from './components/ConnectView'
 import McpManagementView from './components/McpManagementView'
 import DetailDrawer from './components/DetailDrawer'
-import { IconCheck } from './components/Icons'
+import { IconCheck, IconClose } from './components/Icons'
 import { translations } from './translations'
 import {
   listMcpServers,
@@ -18,45 +18,16 @@ import {
   consumeOAuthTicket,
   getCurrentUser,
   getAuthToken,
+  getMcpEndpoint,
 } from './api'
 
-// Initial fallback sample data to guarantee live hackathon demo readiness
-const defaultSampleServers = [
-  {
-    id: 'hotel-basel-demo',
-    serverId: 'hotel-basel-demo',
-    name: 'Grand Hôtel Basel',
-    url: 'https://hotel.bh2026.tekitup.net',
-    source: 'Website',
-    enabled: true,
-    routes: 3,
-    updated: new Date().toISOString(),
-    initials: 'HB',
-    tools: [
-      {
-        name: 'check_availability',
-        description: 'Vérifier la disponibilité des chambres selon les dates et le nombre de personnes',
-        enabled: true,
-        apiMethod: 'POST',
-        executionMode: 'browser',
-      },
-      {
-        name: 'reserve_room',
-        description: 'Préparer une réservation de chambre (confirmation humaine obligatoire)',
-        enabled: true,
-        apiMethod: 'POST',
-        executionMode: 'browser',
-      },
-      {
-        name: 'get_screenshot',
-        description: 'Capturer un aperçu visuel en temps réel de la confirmation',
-        enabled: true,
-        apiMethod: 'GET',
-        executionMode: 'browser',
-      },
-    ],
-  },
-]
+function readSavedTheme() {
+  try {
+    return localStorage.getItem('adobe-theme')
+  } catch {
+    return null
+  }
+}
 
 function normalizeServer(server) {
   const name = server.hotelName || server.hotel_name || server.name || server.targetUrl || 'Serveur MCP'
@@ -105,7 +76,7 @@ function normalizeServer(server) {
 export default function App() {
   const [page, setPage] = useState('home') // 'home' | 'servers'
   const [colorScheme, setColorScheme] = useState(() => {
-    const saved = localStorage.getItem('adobe-theme')
+    const saved = readSavedTheme()
     if (saved) return saved
     return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
   })
@@ -118,26 +89,31 @@ export default function App() {
   // Rail expansion state (expand/collapse sidebar to see page titles)
   const [railExpanded, setRailExpanded] = useState(false)
 
-  const [servers, setServers] = useState(defaultSampleServers)
+  const [servers, setServers] = useState([])
   const [selected, setSelected] = useState(null)
   const [stage, setStage] = useState('idle') // 'idle' | 'analyzing' | 'result'
   const [analyzedUrl, setAnalyzedUrl] = useState('')
   const [generated, setGenerated] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [toast, setToast] = useState('')
+  const [serversLoading, setServersLoading] = useState(true)
+  const [serversError, setServersError] = useState('')
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
   const [copiedId, setCopiedId] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
-  const [notifications, setNotifications] = useState([
-    { title: 'Grand Hôtel Basel MCP server ready for AI agents', time: '5m ago' },
-  ])
+  const [notifications, setNotifications] = useState([])
 
   // Active translation dictionary
   const t = translations[language] || translations.en
 
   // Sync theme with localStorage and body background
-  useEffect(() => {
-    localStorage.setItem('adobe-theme', colorScheme)
+  useLayoutEffect(() => {
+    try {
+      localStorage.setItem('adobe-theme', colorScheme)
+    } catch {
+      // Ignore storage errors in restricted contexts
+    }
     document.documentElement.className = `theme-${colorScheme}`
     document.body.className = `theme-${colorScheme}`
   }, [colorScheme])
@@ -151,7 +127,7 @@ export default function App() {
   useEffect(() => {
     if (getAuthToken()) {
       getCurrentUser()
-        .then(user => setCurrentUser(user))
+        .then(({ user }) => setCurrentUser(user))
         .catch(() => setCurrentUser(null))
     }
   }, [])
@@ -160,11 +136,12 @@ export default function App() {
   async function refreshServers() {
     try {
       const data = await listMcpServers()
-      if (Array.isArray(data) && data.length > 0) {
-        setServers(data.map(normalizeServer))
-      }
-    } catch {
-      // Backend not running or offline, keep default sample servers for demo
+      setServers((Array.isArray(data) ? data : []).map(normalizeServer))
+      setServersError('')
+    } catch (err) {
+      setServersError(err.message)
+    } finally {
+      setServersLoading(false)
     }
   }
 
@@ -178,7 +155,10 @@ export default function App() {
     const provider = params.get('provider')
     const ticket = params.get('ticket')
 
-    if (oauth && serverId && ticket) {
+    if (oauth === 'error') {
+      window.history.replaceState({}, '', window.location.pathname)
+      showToast(`La connexion du compte ${provider} a échoué`, 'error')
+    } else if (oauth && serverId && ticket) {
       window.history.replaceState({}, '', window.location.pathname)
       consumeOAuthTicket(provider, ticket, serverId)
         .then(() => {
@@ -201,19 +181,35 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const showToast = (message) => {
-    setToast(message)
-    window.setTimeout(() => setToast(''), 3000)
+  // Reload the list each time the user opens it
+  useEffect(() => {
+    if (page === 'servers') refreshServers()
+  }, [page])
+
+  const showToast = (message, kind = 'success') => {
+    window.clearTimeout(toastTimer.current)
+    setToast({ message, kind })
+    toastTimer.current = window.setTimeout(() => setToast(null), kind === 'error' ? 6000 : 3000)
   }
 
   const handleNewMcp = () => {
     setPage('home')
-    setStage('idle')
+    // A running analysis cannot be cancelled, so its progress stays on screen.
+    setStage((current) => (current === 'analyzing' ? current : 'idle'))
+    setError('')
     setSelected(null)
     window.setTimeout(() => {
       const input = document.getElementById('site-url-input')
       input?.focus()
     }, 50)
+  }
+
+  // Never reopens the drawer if it was closed while the request was running
+  const applyServerUpdate = (updated) => {
+    setServers((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item))
+    )
+    setSelected((current) => (current?.id === updated.id ? updated : current))
   }
 
   // Analyze URL and build MCP
@@ -287,22 +283,12 @@ export default function App() {
       const updated = normalizeServer(
         await setMcpServerEnabled(server.id, enabled)
       )
-      setServers((current) =>
-        current.map((item) => (item.id === server.id ? updated : item))
-      )
-      if (selected?.id === server.id) {
-        setSelected(updated)
-      }
+      applyServerUpdate(updated)
       showToast(t.toastServerState(enabled))
-    } catch {
+    } catch (err) {
       // Local fallback toggle
       const updated = { ...server, enabled }
-      setServers((current) =>
-        current.map((item) => (item.id === server.id ? updated : item))
-      )
-      if (selected?.id === server.id) {
-        setSelected(updated)
-      }
+      applyServerUpdate(updated)
       showToast(t.toastServerState(enabled))
     }
   }
@@ -310,48 +296,34 @@ export default function App() {
   // Toggle tool active state
   const handleToggleTool = async (server, tool, enabled) => {
     try {
-      const updated = normalizeServer(
-        await setMcpToolEnabled(server.id, tool.name, enabled)
+      applyServerUpdate(
+        normalizeServer(await setMcpToolEnabled(server.id, tool.name, enabled))
       )
-      setServers((current) =>
-        current.map((item) => (item.id === server.id ? updated : item))
-      )
-      setSelected(updated)
-    } catch {
-      // Local fallback
-      const updatedTools = (server.tools || []).map((t) =>
-        t.name === tool.name ? { ...t, enabled } : t
-      )
-      const updated = { ...server, tools: updatedTools }
-      setServers((current) =>
-        current.map((item) => (item.id === server.id ? updated : item))
-      )
-      setSelected(updated)
+    } catch (err) {
+      showToast(err.message || 'Impossible de modifier cette route.', 'error')
     }
   }
 
   // Copy MCP endpoint for Claude / agents
-  const handleCopyEndpoint = (server) => {
-    const endpoint = `${window.location.origin}/api/v1/servers/${encodeURIComponent(
-      server.id
-    )}`
-    navigator.clipboard?.writeText(endpoint)
-    setCopiedId(server.id)
-    showToast(t.toastCopied(server.name))
-    window.setTimeout(() => setCopiedId(null), 2000)
+  const handleCopyEndpoint = async (server) => {
+    try {
+      const endpoint = getMcpEndpoint(server.id)
+      await navigator.clipboard.writeText(endpoint)
+      setCopiedId(server.id)
+      showToast(t.toastCopied(server.name))
+      window.setTimeout(() => setCopiedId(null), 2000)
+    } catch {
+      showToast(language === 'fr' ? "Copie impossible : sélectionnez l'endpoint manuellement." : "Copy failed: please select endpoint manually.", 'error')
+    }
   }
 
   // Refresh server details
   const handleUpdateServer = async (server) => {
     try {
-      const refreshed = normalizeServer(await getMcpServer(server.id))
-      setServers((current) =>
-        current.map((item) => (item.id === server.id ? refreshed : item))
-      )
-      setSelected(refreshed)
+      applyServerUpdate(normalizeServer(await getMcpServer(server.id)))
       showToast(t.toastServerUpdated)
     } catch (err) {
-      showToast(t.toastServerDataCurrent)
+      showToast(err.message || t.toastServerDataCurrent, 'error')
     }
   }
 
@@ -365,6 +337,8 @@ export default function App() {
         setLanguage={setLanguage}
         onNavigateHome={() => setPage('home')}
         notifications={notifications}
+        currentUser={currentUser}
+        onNavigate={setPage}
         t={t}
       />
 
@@ -394,6 +368,7 @@ export default function App() {
                 onReset={() => {
                   setStage('idle')
                   setAnalyzedUrl('')
+                  setError('')
                 }}
                 onGoToManagement={() => setPage('servers')}
                 onEnrich={handleEnrich}
@@ -404,11 +379,15 @@ export default function App() {
             {page === 'servers' && (
               <McpManagementView
                 servers={servers}
+                loading={serversLoading}
+                error={serversError}
+                onRetry={refreshServers}
                 onSelectServer={setSelected}
                 onToggleServer={handleToggleServer}
                 onNewMcp={handleNewMcp}
                 onCopyEndpoint={handleCopyEndpoint}
                 copiedId={copiedId}
+                language={language}
                 t={t}
               />
             )}
@@ -432,9 +411,12 @@ export default function App() {
 
       {/* Floating Toast Notification */}
       {toast && (
-        <div className="adobe-toast" role="status">
-          <IconCheck size={16} />
-          <span>{toast}</span>
+        <div
+          className={`adobe-toast ${toast.kind === 'error' ? 'error' : ''}`}
+          role={toast.kind === 'error' ? 'alert' : 'status'}
+        >
+          {toast.kind === 'error' ? <IconClose size={16} /> : <IconCheck size={16} />}
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

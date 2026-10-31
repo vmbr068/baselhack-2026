@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   IconPlus,
   IconCheck,
@@ -23,6 +23,12 @@ export default function ConnectView({
   const [branch, setBranch] = useState('main')
   const [showEnrichForm, setShowEnrichForm] = useState(false)
 
+  // A new result starts with a closed enrichment form; so does a successful run.
+  useEffect(() => {
+    setShowEnrichForm(false)
+    setRepoUrl('')
+  }, [generated])
+
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!url.trim()) return
@@ -32,6 +38,8 @@ export default function ConnectView({
   const handleSuggestion = (suggestedUrl) => {
     setUrl(suggestedUrl)
   }
+
+  const toolCount = generated?.tools?.length || 0
 
   return (
     <div className="connect-view">
@@ -48,6 +56,7 @@ export default function ConnectView({
                 type="url"
                 className="pill-input"
                 placeholder={t.placeholder}
+                aria-label={t.placeholder}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 required
@@ -85,7 +94,7 @@ export default function ConnectView({
           </div>
 
           {error && (
-            <div className="connect-error-banner">
+            <div className="connect-error" role="alert">
               {error}
             </div>
           )}
@@ -166,6 +175,7 @@ export default function ConnectView({
                   type="url"
                   className="pill-input"
                   placeholder={t.enrichRepoPlaceholder}
+                  aria-label={t.enrichRepoPlaceholder}
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   required
@@ -174,7 +184,7 @@ export default function ConnectView({
               <button
                 type="submit"
                 className="pill-submit-btn"
-                style={{ height: 40, fontSize: 13 }}
+                style={{ height: 40, fontSize: 13, width: 'auto' }}
                 disabled={busy}
               >
                 {busy ? t.enriching : t.enrichSubmit}
@@ -189,12 +199,21 @@ export default function ConnectView({
             </form>
           )}
 
+          {error && (
+            <div className="connect-error" role="alert">
+              {error}
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="result-actions-row">
             <button
               type="button"
               className="suggestion-chip"
-              onClick={onReset}
+              onClick={() => {
+                setUrl('')
+                onReset()
+              }}
               style={{ padding: '10px 18px', fontSize: 13 }}
             >
               {t.connectAnother}
@@ -202,6 +221,7 @@ export default function ConnectView({
             <button
               type="button"
               className="pill-submit-btn"
+              style={{ height: 40, fontSize: 13, width: 'auto' }}
               onClick={onGoToManagement}
             >
               <span>{t.goToManagement}</span>

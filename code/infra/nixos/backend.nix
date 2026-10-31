@@ -16,6 +16,8 @@ in
       PORT = "3000";
       CHROMIUM_PATH = lib.getExe pkgs.chromium;
       HOME = "/var/lib/mcp-exchange-backend";
+      # Temporary, for debugging: disables the site allowlist. Remove afterwards.
+      ALLOWED_SITE_ORIGINS = "*";
     };
 
     # The backend resolves mock_hotel/, static/ and generated_servers/ from its

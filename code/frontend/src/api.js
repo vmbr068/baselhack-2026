@@ -81,6 +81,11 @@ export const setMcpServerEnabled = (serverId, enabled) =>
 export const setMcpToolEnabled = (serverId, toolName, enabled) =>
   request(`/servers/${encodeURIComponent(serverId)}/tools/${encodeURIComponent(toolName)}`, patchBody({ enabled }))
 
+export const getMcpEndpoint = serverId => {
+  const base = new URL(API_BASE_URL, window.location.origin).href.replace(/\/$/, '')
+  return `${base}/servers/${encodeURIComponent(serverId)}/mcp/sse`
+}
+
 export const consumeOAuthTicket = (provider, ticket, serverId) =>
   request(`/oauth/${provider}/consume`, jsonBody({ ticket, serverId }))
 

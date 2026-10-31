@@ -1,17 +1,52 @@
-import React, { useState, useMemo } from 'react'
+import React, { useRef, useState, useMemo } from 'react'
 import {
   IconSearch,
   IconPlus,
-  IconExternalLink,
   IconCopy,
   IconCheck,
-  IconLightning,
-  IconGlobe,
   IconServers,
 } from './Icons'
 
+const PAGE_SIZE = 12
+
+// Every page when there are few, otherwise the first, the last and the neighbours.
+function visiblePages(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = [1, current - 1, current, current + 1, total]
+    .filter((page, i, all) => page >= 1 && page <= total && all.indexOf(page) === i)
+    .sort((a, b) => a - b)
+  return pages.flatMap((page, i) =>
+    i > 0 && page - pages[i - 1] > 1 ? [`gap-${page}`, page] : [page]
+  )
+}
+
+function siteLink(url) {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'file:') return { label: 'Fichier local', href: null }
+    return { label: parsed.host, href: url }
+  } catch {
+    return { label: url, href: null }
+  }
+}
+
+const dateFormat = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function formatDate(value) {
+  const date = new Date(value)
+  return value && !Number.isNaN(date.getTime()) ? dateFormat.format(date) : ''
+}
+
 export default function McpManagementView({
   servers,
+  loading,
+  error,
+  onRetry,
   onSelectServer,
   onToggleServer,
   onNewMcp,
@@ -20,6 +55,8 @@ export default function McpManagementView({
 }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'disabled'
+  const [page, setPage] = useState(1)
+  const viewRef = useRef(null)
 
   // Filtered servers list
   const filteredServers = useMemo(() => {
@@ -35,234 +72,177 @@ export default function McpManagementView({
         (statusFilter === 'disabled' && server.enabled === false)
 
       return matchesSearch && matchesStatus
-    })
+    }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
   }, [servers, search, statusFilter])
 
+  // The list can shrink under the current page, for example after a refresh.
+  const totalPages = Math.max(1, Math.ceil(filteredServers.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const firstIndex = (currentPage - 1) * PAGE_SIZE
+  const pageServers = filteredServers.slice(firstIndex, firstIndex + PAGE_SIZE)
+
+  const changeFilter = (nextFilter) => {
+    setStatusFilter(nextFilter)
+    setPage(1)
+  }
+
+  const goToPage = (nextPage) => {
+    setPage(nextPage)
+    viewRef.current?.closest('.adobe-canvas-content')?.scrollTo({ top: 0 })
+  }
+
   return (
-    <div className="mcp-management-view">
-      {/* Header Toolbar */}
+    <div className="mcp-management-view" ref={viewRef}>
+      {/* Header */}
       <div className="management-header">
-        <div className="management-title-group">
-          <span className="management-eyebrow">Connecteurs IA</span>
-          <h1 className="management-title">Mes serveurs MCP</h1>
-          <p className="management-subtitle">
-            Gérez vos sites connectés, activez leurs routes et exposez-les aux agents (Claude, Cursor, etc.).
-          </p>
+        <h1 className="management-title">Mes serveurs MCP</h1>
+        <button type="button" className="management-add-btn" onClick={onNewMcp}>
+          <IconPlus size={16} />
+          <span>Connecter un site</span>
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="management-controls">
+        <div className="mcp-search-wrapper">
+          <IconSearch size={15} />
+          <input
+            type="text"
+            className="mcp-search-input"
+            placeholder="Rechercher"
+            aria-label="Rechercher un MCP"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+          />
         </div>
 
-        <div className="management-controls">
-          {/* Search bar */}
-          <div className="mcp-search-wrapper">
-            <IconSearch size={15} />
-            <input
-              type="text"
-              className="mcp-search-input"
-              placeholder="Rechercher un MCP…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Filter Pills */}
-          <div className="filter-pills">
-            <button
-              type="button"
-              className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('all')}
-            >
-              Tous ({servers.length})
-            </button>
-            <button
-              type="button"
-              className={`filter-pill ${statusFilter === 'active' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('active')}
-            >
-              Actifs ({servers.filter((s) => s.enabled !== false).length})
-            </button>
-            <button
-              type="button"
-              className={`filter-pill ${statusFilter === 'disabled' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('disabled')}
-            >
-              Désactivés ({servers.filter((s) => s.enabled === false).length})
-            </button>
-          </div>
-
-          {/* New MCP Button */}
-          <button type="button" className="management-add-btn" onClick={onNewMcp}>
-            <IconPlus size={16} />
-            <span>Connecter un site</span>
+        <div className="filter-pills">
+          <button
+            type="button"
+            className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
+            onClick={() => changeFilter('all')}
+          >
+            Tous ({servers.length})
+          </button>
+          <button
+            type="button"
+            className={`filter-pill ${statusFilter === 'active' ? 'active' : ''}`}
+            onClick={() => changeFilter('active')}
+          >
+            Actifs ({servers.filter((s) => s.enabled !== false).length})
+          </button>
+          <button
+            type="button"
+            className={`filter-pill ${statusFilter === 'disabled' ? 'active' : ''}`}
+            onClick={() => changeFilter('disabled')}
+          >
+            Désactivés ({servers.filter((s) => s.enabled === false).length})
           </button>
         </div>
       </div>
 
       {/* Cards Grid */}
       <div className="mcp-cards-grid">
-        {filteredServers.map((server) => {
-          let hostname = ''
-          let isLocal = false
-          try {
-            const parsed = new URL(server.url)
-            hostname = parsed.hostname
-            isLocal = ['localhost', '127.0.0.1'].includes(hostname)
-          } catch {
-            hostname = server.url
-          }
-
+        {pageServers.map((server) => {
+          const enabled = server.enabled !== false
+          const site = siteLink(server.url)
+          const created = formatDate(server.createdAt)
           const activeRoutesCount = (server.tools || []).filter(
             (t) => t.enabled !== false
           ).length
 
-          const faviconUrl = hostname
-            ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`
-            : ''
-          const screenshot =
-            server.screenshot_url ||
-            server.screenshotUrl ||
-            server.scanSummary?.screenshotPath
-
           return (
-            <div
-              key={server.id}
-              className={`mcp-card ${server.enabled === false ? 'disabled' : ''}`}
-            >
-              {/* Site Preview Thumbnail Header */}
-              <div className="mcp-preview-box">
-                <div className="preview-browser-bar">
-                  <span className="preview-dot" />
-                  <span className="preview-dot" />
-                  <span className="preview-dot" />
-                  <span className="preview-url-tag">{hostname || server.name}</span>
-                </div>
-
-                <div className="preview-iframe-wrapper">
-                  {screenshot ? (
-                    <img
-                      src={screenshot}
-                      alt={server.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div className="preview-fallback-banner">
-                      <div className="preview-site-icon">
-                        {faviconUrl ? (
-                          <img
-                            src={faviconUrl}
-                            alt=""
-                            style={{ width: 26, height: 26, borderRadius: 4 }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : null}
-                        <span>{server.initials || 'MC'}</span>
-                      </div>
-                      <div className="preview-site-meta">
-                        <strong>{server.name}</strong>
-                        <span>{server.url}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Card Body */}
-              <div className="mcp-card-body">
-                <div className="mcp-card-title-row">
-                  <div className="mcp-card-name-group">
-                    <span className="mcp-card-name" title={server.name}>
-                      {server.name}
-                    </span>
+            <div key={server.id} className={`mcp-card ${enabled ? '' : 'disabled'}`}>
+              <div className="mcp-card-title-row">
+                <div className="mcp-card-icon">{server.initials || 'MC'}</div>
+                <div className="mcp-card-name-group">
+                  <span className="mcp-card-name" title={server.name}>
+                    {server.name}
+                  </span>
+                  {site.href ? (
                     <a
-                      href={server.url}
+                      href={site.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="mcp-card-url-link"
+                      className="mcp-card-site"
+                      title={server.url}
                     >
-                      <span>{hostname || server.url}</span>
-                      <IconExternalLink size={12} />
+                      {site.label}
                     </a>
-                  </div>
-
-                  {/* Switch to enable/disable server */}
-                  <label
-                    className="custom-switch"
-                    title={server.enabled !== false ? 'Désactiver le MCP' : 'Activer le MCP'}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={server.enabled !== false}
-                      onChange={(e) => onToggleServer(server, e.target.checked)}
-                    />
-                    <span className="custom-switch-slider" />
-                  </label>
+                  ) : (
+                    <span className="mcp-card-site" title={server.url}>
+                      {site.label}
+                    </span>
+                  )}
                 </div>
+                <label
+                  className="custom-switch"
+                  title={enabled ? 'Désactiver le MCP' : 'Activer le MCP'}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`Activer ${server.name}`}
+                    checked={enabled}
+                    onChange={(e) => onToggleServer(server, e.target.checked)}
+                  />
+                  <span className="custom-switch-slider" />
+                </label>
+              </div>
 
-                {/* Badges Row */}
-                <div className="mcp-card-tags-row">
-                  <span
-                    className={`status-indicator-badge ${
-                      server.enabled !== false ? 'active' : 'disabled'
-                    }`}
-                  >
-                    <span className="status-dot-pulse" />
-                    <span>{server.enabled !== false ? 'Actif' : 'Désactivé'}</span>
-                  </span>
+              <div className="mcp-card-meta">
+                <span className={`mcp-card-status ${enabled ? 'active' : ''}`}>
+                  {enabled ? 'Actif' : 'Désactivé'}
+                </span>
+                <span>
+                  {activeRoutesCount} {activeRoutesCount > 1 ? 'routes' : 'route'}
+                </span>
+                {server.source !== 'Website' && <span>{server.source}</span>}
+                {created && <span>{created}</span>}
+              </div>
 
-                  <span
-                    className={`source-badge ${
-                      server.source === 'GitHub'
-                        ? 'github'
-                        : server.source === 'WordPress'
-                        ? 'wordpress'
-                        : ''
-                    }`}
-                  >
-                    {server.source === 'GitHub'
-                      ? '🐙 GitHub'
-                      : server.source === 'WordPress'
-                      ? '🌐 WordPress'
-                      : '🔗 Site Web'}
-                  </span>
-
-                  <span className="routes-metric-badge">
-                    <IconLightning size={13} />
-                    <span>{activeRoutesCount} routes</span>
-                  </span>
-                </div>
-
-                {/* Card Actions Bottom */}
-                <div className="mcp-card-actions">
-                  <button
-                    type="button"
-                    className="btn-manage-routes"
-                    onClick={() => onSelectServer(server)}
-                  >
-                    <span>Gérer les routes</span>
-                    <IconExternalLink size={13} />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn-copy-endpoint"
-                    onClick={() => onCopyEndpoint(server)}
-                    title="Copier le endpoint MCP pour Claude / agents IA"
-                    aria-label="Copier le endpoint MCP"
-                  >
-                    {copiedId === server.id ? (
-                      <IconCheck size={16} />
-                    ) : (
-                      <IconCopy size={16} />
-                    )}
-                  </button>
-                </div>
+              <div className="mcp-card-actions">
+                <button
+                  type="button"
+                  className="btn-manage-routes"
+                  onClick={() => onSelectServer(server)}
+                >
+                  Gérer les routes
+                </button>
+                <button
+                  type="button"
+                  className="btn-copy-endpoint"
+                  onClick={() => onCopyEndpoint(server)}
+                  title="Copier le endpoint MCP pour Claude / agents IA"
+                  aria-label="Copier le endpoint MCP"
+                >
+                  {copiedId === server.id ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                </button>
               </div>
             </div>
           )
         })}
 
         {/* Empty State */}
-        {filteredServers.length === 0 && (
+        {loading && servers.length === 0 && (
+          <div className="mcp-empty-state" role="status">
+            <div className="radar-spinner" />
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Chargement des serveurs…</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="mcp-load-error" role="alert">
+            <span>Impossible de charger les serveurs : {error}</span>
+            <button type="button" className="suggestion-chip" onClick={onRetry}>
+              Réessayer
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && filteredServers.length === 0 && (
           <div className="mcp-empty-state">
             <div className="empty-state-icon">
               <IconServers size={32} />
@@ -271,22 +251,68 @@ export default function McpManagementView({
               Aucun serveur MCP trouvé
             </h3>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 360 }}>
-              {search
+              {servers.length === 0
+                ? 'Vous n’avez pas encore connecté de site web. Commencez par en analyser un !'
+                : search
                 ? `Aucun résultat ne correspond à votre recherche "${search}".`
-                : 'Vous n’avez pas encore connecté de site web. Commencez par en analyser un !'}
+                : 'Aucun serveur ne correspond à ce filtre.'}
             </p>
-            <button
-              type="button"
-              className="pill-submit-btn"
-              style={{ height: 40, fontSize: 13, marginTop: 8 }}
-              onClick={onNewMcp}
-            >
-              <IconPlus size={16} />
-              <span>Connecter un premier site</span>
-            </button>
+            {servers.length === 0 && (
+              <button
+                type="button"
+                className="pill-submit-btn"
+                style={{ height: 40, fontSize: 13, width: 'auto' }}
+                onClick={onNewMcp}
+              >
+                <IconPlus size={16} />
+                <span>Connecter un premier site</span>
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <nav className="pagination" aria-label="Pagination des serveurs MCP">
+          <span className="pagination-range">
+            {firstIndex + 1}–{firstIndex + pageServers.length} sur {filteredServers.length}
+          </span>
+          <div className="pagination-pages">
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={currentPage === 1}
+              onClick={() => goToPage(currentPage - 1)}
+            >
+              Précédent
+            </button>
+            {visiblePages(currentPage, totalPages).map((item) =>
+              typeof item === 'number' ? (
+                <button
+                  key={item}
+                  type="button"
+                  className={`pagination-btn ${item === currentPage ? 'active' : ''}`}
+                  aria-label={`Page ${item}`}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  onClick={() => goToPage(item)}
+                >
+                  {item}
+                </button>
+              ) : (
+                <span key={item} className="pagination-gap">…</span>
+              )
+            )}
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={currentPage === totalPages}
+              onClick={() => goToPage(currentPage + 1)}
+            >
+              Suivant
+            </button>
+          </div>
+        </nav>
+      )}
     </div>
   )
 }

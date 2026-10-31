@@ -61,11 +61,11 @@
     "hotel-demo": {
       "flake": false,
       "locked": {
-        "lastModified": 1793462086,
-        "narHash": "sha256-p4/pYtneXyaThbni3P9SL/WkbPB3S95aTym1YzmE2ig=",
+        "lastModified": 1793473586,
+        "narHash": "sha256-lHgjss/EcfZEGoQ+bISm45xmKjrWJuOSxBg2Gid7HtE=",
         "owner": "agrand2004",
         "repo": "hotel-website-demo",
-        "rev": "135ade4ab5ee5656db2a5993dea756f8f72f6e43",
+        "rev": "911627e6be0aa139353e57b184b1421ab697c6c4",
         "type": "github"
       },
       "original": {

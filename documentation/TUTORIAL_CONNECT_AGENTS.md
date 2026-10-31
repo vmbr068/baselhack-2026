@@ -222,7 +222,7 @@ In accordance with [AGENTS.md](../AGENTS.md), irreversible actions (such as book
      }
    }
    ```
-3. **Agent shows the user the `approval_url` from `confirmation_details`**. The page lists the request, and only a click on **Approve** there unlocks it. A `confirmed_by_human` flag sent by the agent is ignored.
+3. **Agent shows the user the `approval_url` from `confirmation_details`**. The page lists the request, and only a click on **Approve** there unlocks it. A `confirmed_by_human` flag sent by the agent is ignored. The page first asks for the approver password (`APPROVER_PASSWORD` on the backend), so an agent that opens or posts to the link itself cannot approve. Log in once at `/approver/login` before a demo.
 4. **User approves**, and the agent calls the tool again with only the token. It runs exactly what was approved, once:
    ```json
    {

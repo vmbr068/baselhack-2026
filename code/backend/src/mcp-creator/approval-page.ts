@@ -31,6 +31,8 @@ function page(title: string, body: string): string {
   form { display: inline-block; margin: 8px 8px 0 0; }
   button { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid #1f1e1d; background: #fff; cursor: pointer; }
   .approve { background: #1f1e1d; color: #fff; }
+  input { font: inherit; padding: 10px; border-radius: 8px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; margin: 8px 0; }
+  .error { color: #b3261e; }
 </style>
 </head>
 <body><main>${body}</main></body>
@@ -56,6 +58,21 @@ export function renderApprovalPage(
 <dl>${rows}</dl>
 <form method="post" action="${action}"><button class="approve" type="submit">Approve</button></form>
 <form method="post" action="${action}/reject"><button type="submit">Reject</button></form>`,
+  );
+}
+
+export function renderApproverLogin(next: string, error?: string): string {
+  return page(
+    'Approver login',
+    `<h1>Log in to approve</h1>
+<p>Only the human approver can approve actions requested by an AI agent.</p>
+${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
+<form method="post" action="/approver/login" style="display:block">
+<label for="password">Approver password</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+<input name="next" type="hidden" value="${escapeHtml(next)}">
+<button class="approve" type="submit">Log in</button>
+</form>`,
   );
 }
 

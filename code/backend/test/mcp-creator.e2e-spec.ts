@@ -16,11 +16,11 @@ describe('McpCreatorController (e2e)', () => {
   ).href;
 
   let baseUrl: string;
+  // A browser where the human approver is logged in (keeps the cookie).
+  let approver: ReturnType<typeof request.agent>;
 
   const approve = (details: { approval_url: string }) =>
-    request(app.getHttpServer())
-      .post(new URL(details.approval_url).pathname)
-      .expect(200);
+    approver.post(new URL(details.approval_url).pathname).expect(200);
 
   const callReserve = (serverId: string, body: Record<string, unknown>) =>
     request(app.getHttpServer())
@@ -45,6 +45,13 @@ describe('McpCreatorController (e2e)', () => {
     ]
       .filter(Boolean)
       .join(',');
+
+    approver = request.agent(app.getHttpServer());
+    await approver
+      .post('/approver/login')
+      .type('form')
+      .send({ password: process.env.APPROVER_PASSWORD })
+      .expect(200);
   });
 
   afterAll(async () => {
@@ -210,14 +217,12 @@ describe('McpCreatorController (e2e)', () => {
     });
     const url = new URL(pending.body.confirmation_details.approval_url);
 
-    const page = await request(app.getHttpServer()).get(url.pathname);
+    const page = await approver.get(url.pathname);
     expect(page.status).toBe(200);
     expect(page.text).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(page.text).not.toContain('<script>');
 
-    await request(app.getHttpServer())
-      .post(`${url.pathname}/reject`)
-      .expect(200);
+    await approver.post(`${url.pathname}/reject`).expect(200);
     await request(app.getHttpServer()).get(url.pathname).expect(404);
   });
 

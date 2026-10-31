@@ -19,6 +19,8 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
   let serverA: string;
   let serverB: string;
   let launchSpy: ReturnType<typeof vi.spyOn>;
+  // The human's browser, logged in with the approver password.
+  let approver: ReturnType<typeof request.agent>;
 
   const stay = {
     room_title: 'Deluxe Rhine View Suite',
@@ -59,6 +61,13 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
         .expect(201);
     serverA = (await generate()).body.server_id;
     serverB = (await generate()).body.server_id;
+
+    approver = request.agent(app.getHttpServer());
+    await approver
+      .post('/approver/login')
+      .type('form')
+      .send({ password: process.env.APPROVER_PASSWORD })
+      .expect(200);
 
     // Scanning above needs the browser; from here on, nothing may launch it.
     launchSpy = vi.spyOn(chromium, 'launch');
@@ -108,7 +117,7 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
 
   it('does not approve when the link is only opened (GET, link previews)', async () => {
     const { token, approvalPath } = await requestApproval(serverA);
-    await request(app.getHttpServer()).get(approvalPath).expect(200);
+    await approver.get(approvalPath).expect(200);
 
     const res = await call(serverA, { confirmation_token: token });
 
@@ -117,10 +126,8 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
 
   it('refuses a token the human rejected', async () => {
     const { token, approvalPath } = await requestApproval(serverA);
-    await request(app.getHttpServer())
-      .post(`${approvalPath}/reject`)
-      .expect(200);
-    await request(app.getHttpServer()).post(approvalPath).expect(404);
+    await approver.post(`${approvalPath}/reject`).expect(200);
+    await approver.post(approvalPath).expect(404);
 
     const res = await call(serverA, { confirmation_token: token });
 
@@ -129,7 +136,7 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
 
   it('refuses an approved token on another MCP server', async () => {
     const { token, approvalPath } = await requestApproval(serverA);
-    await request(app.getHttpServer()).post(approvalPath).expect(200);
+    await approver.post(approvalPath).expect(200);
 
     const res = await call(serverB, { confirmation_token: token });
 
@@ -138,13 +145,31 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
 
   it('refuses an approved token once it has expired', async () => {
     const { token, approvalPath } = await requestApproval(serverA);
-    await request(app.getHttpServer()).post(approvalPath).expect(200);
+    await approver.post(approvalPath).expect(200);
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 16 * 60 * 1000);
 
     const res = await call(serverA, { confirmation_token: token });
 
     expect(res.body.status).toBe('rejected');
+  });
+
+  it('refuses an approval the agent posts to its own link', async () => {
+    const { token, approvalPath } = await requestApproval(serverA);
+    const agent = request(app.getHttpServer());
+
+    const page = await agent.get(approvalPath).expect(200);
+    expect(page.text).toContain('Approver password');
+    expect(page.text).not.toContain('>Approve<');
+    await agent.post(approvalPath).expect(401);
+    await agent
+      .post(approvalPath)
+      .set('Cookie', 'approver_session=forged')
+      .expect(401);
+    await agent.post(`${approvalPath}/reject`).expect(401);
+
+    const res = await call(serverA, { confirmation_token: token });
+    expect(res.body.status).toBe('pending_confirmation');
   });
 
   it.each(['Reserve_Room', 'reserve_room ', 'reserve-room'])(
@@ -194,5 +219,19 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
     } finally {
       await client.close();
     }
+  });
+
+  // Last: it locks the approver login for the rest of this file.
+  it('locks the approver login after repeated wrong passwords', async () => {
+    const login = (password: string) =>
+      request(app.getHttpServer())
+        .post('/approver/login')
+        .type('form')
+        .send({ password });
+
+    for (let i = 0; i < 5; i++) await login('guess').expect(401);
+    const res = await login(process.env.APPROVER_PASSWORD!).expect(401);
+
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 });

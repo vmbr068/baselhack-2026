@@ -12,7 +12,17 @@ import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { renderApprovalPage, renderApprovalResult } from './approval-page.js';
+import {
+  renderApprovalPage,
+  renderApprovalResult,
+  renderApproverLogin,
+} from './approval-page.js';
+import {
+  APPROVER_COOKIE,
+  APPROVER_SESSION_TTL_MS,
+  isApprover,
+  loginApprover,
+} from './approver-auth.js';
 import { McpCreatorService } from './mcp-creator.service.js';
 import { McpAgentTransportService } from './mcp-agent-transport.service.js';
 import {
@@ -34,6 +44,10 @@ import type {
 const EXPIRED_APPROVAL_PAGE = renderApprovalResult(
   'Link expired',
   'This approval link is invalid, expired or already used. Nothing was done.',
+);
+const NOT_APPROVER_PAGE = renderApprovalResult(
+  'Not logged in',
+  'Only the logged-in human approver can do this. Nothing was done.',
 );
 
 @ApiTags('MCP Creator')
@@ -319,12 +333,65 @@ export class McpCreatorController {
     );
   }
 
+  @ApiOperation({ summary: 'Log the human approver in' })
+  @Get('approver/login')
+  showApproverLogin(@Res() res: Response): void {
+    res.type('html').send(renderApproverLogin(''));
+  }
+
+  @ApiOperation({ summary: 'Log the human approver in with APPROVER_PASSWORD' })
+  @Post('approver/login')
+  approverLogin(
+    @Body() body: { password?: unknown; next?: unknown },
+    @Res() res: Response,
+  ): void {
+    // Only redirect back to an approval page, never to an arbitrary URL.
+    const next =
+      typeof body?.next === 'string' && /^\/confirm\/[\w-]+$/.test(body.next)
+        ? body.next
+        : '';
+    const sessionId = loginApprover(body?.password);
+    if (!sessionId) {
+      res
+        .status(401)
+        .type('html')
+        .send(renderApproverLogin(next, 'Wrong password, or too many tries.'));
+      return;
+    }
+    res.cookie(APPROVER_COOKIE, sessionId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.PUBLIC_BASE_URL?.startsWith('https:') ?? false,
+      maxAge: APPROVER_SESSION_TTL_MS,
+    });
+    if (next) {
+      res.redirect(303, next);
+      return;
+    }
+    res
+      .status(200)
+      .type('html')
+      .send(
+        renderApprovalResult('Logged in', 'You can now approve agent actions.'),
+      );
+  }
+
   @ApiOperation({ summary: 'Show a human the action an agent asks to approve' })
   @Get('confirm/:token')
-  showApproval(@Param('token') token: string, @Res() res: Response): void {
+  showApproval(
+    @Param('token') token: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): void {
     const request = this.mcpCreatorService.getApprovalRequest(token);
     if (!request) {
       res.status(404).type('html').send(EXPIRED_APPROVAL_PAGE);
+      return;
+    }
+    if (!isApprover(req.headers.cookie)) {
+      res
+        .type('html')
+        .send(renderApproverLogin(`/confirm/${encodeURIComponent(token)}`));
       return;
     }
     res.type('html').send(renderApprovalPage(token, request));
@@ -332,7 +399,15 @@ export class McpCreatorController {
 
   @ApiOperation({ summary: 'Approve an action requested by an agent' })
   @Post('confirm/:token')
-  approve(@Param('token') token: string, @Res() res: Response): void {
+  approve(
+    @Param('token') token: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): void {
+    if (!isApprover(req.headers.cookie)) {
+      res.status(401).type('html').send(NOT_APPROVER_PAGE);
+      return;
+    }
     if (!this.mcpCreatorService.approveConfirmation(token)) {
       res.status(404).type('html').send(EXPIRED_APPROVAL_PAGE);
       return;
@@ -350,7 +425,15 @@ export class McpCreatorController {
 
   @ApiOperation({ summary: 'Reject an action requested by an agent' })
   @Post('confirm/:token/reject')
-  reject(@Param('token') token: string, @Res() res: Response): void {
+  reject(
+    @Param('token') token: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): void {
+    if (!isApprover(req.headers.cookie)) {
+      res.status(401).type('html').send(NOT_APPROVER_PAGE);
+      return;
+    }
     this.mcpCreatorService.rejectConfirmation(token);
     res
       .status(200)

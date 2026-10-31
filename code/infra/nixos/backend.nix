@@ -30,6 +30,9 @@ in
       DynamicUser = true;
       StateDirectory = "mcp-exchange-backend";
       WorkingDirectory = "/var/lib/mcp-exchange-backend";
+      # Holds APPROVER_PASSWORD, kept out of the Nix store. Create it on the VM
+      # (root, mode 600). Without it, nobody can approve a booking.
+      EnvironmentFile = "-/etc/mcp-exchange-backend.env";
       Restart = "on-failure";
       RestartSec = 5;
     };

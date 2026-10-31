@@ -128,14 +128,15 @@ export class ExecutorService {
       config.targetUrl,
     );
 
-    // Determine if tool represents an irreversible action (e.g. reservation, booking, payment)
+    // Only reads skip approval: any API call that can write (not GET) needs a
+    // human, whatever the generator guessed about the tool.
     const isIrreversible = Boolean(
       toolDef.is_irreversible ||
       toolDef.requires_confirmation ||
       toolDef.executionStep === 'reserve_room' ||
-      toolName.toLowerCase().includes('reserve') ||
-      toolName.toLowerCase().includes('book') ||
-      toolName.toLowerCase().includes('pay'),
+      (toolDef.apiEndpoint &&
+        (toolDef.apiMethod || 'POST').toUpperCase() !== 'GET') ||
+      /reserv|book|pay|order|checkout|purchase|cancel/i.test(toolName),
     );
 
     // Safety Guardrail: only a human, on the approval page, can unlock this.

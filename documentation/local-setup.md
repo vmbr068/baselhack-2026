@@ -17,10 +17,13 @@ Run each service in its own terminal, from the repository root.
 ```bash
 cd code/backend
 npm ci
-npm run start:dev
+APPROVER_PASSWORD=choose-one npm run start:dev
 ```
 
 Check: `curl localhost:3000` returns `Hello World!`.
+
+`APPROVER_PASSWORD` is what the human types to approve a booking on the
+approval page. Without it, no booking can be approved.
 
 ## MCP creator
 

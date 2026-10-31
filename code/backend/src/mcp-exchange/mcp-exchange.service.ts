@@ -1,10 +1,22 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { McpCreatorService } from '../mcp-creator/mcp-creator.service.js';
 import type { MCPServerConfig } from '../mcp-creator/mcp-creator.types.js';
-import type { ExchangeEntry, PublishResponse } from './mcp-exchange.types.js';
+import type {
+  ExchangeEntry,
+  ExchangeEntrySummary,
+  ExchangeVersion,
+  ExchangeVersionResponse,
+  PublishedVersionSummary,
+  PublishResponse,
+} from './mcp-exchange.types.js';
 
 @Injectable()
 export class McpExchangeService implements OnModuleInit {
@@ -98,20 +110,97 @@ export class McpExchangeService implements OnModuleInit {
     return this.toResponse(entry);
   }
 
+  listEntries(query?: string): ExchangeEntrySummary[] {
+    let entries = Array.from(this.entriesStore.values());
+    const q = query?.trim().toLowerCase();
+    if (q) {
+      entries = entries.filter((entry) => this.matchesQuery(entry, q));
+    }
+    return entries
+      .map((entry) => this.toSummary(entry))
+      .sort((a, b) => b.published_at.localeCompare(a.published_at));
+  }
+
+  getEntry(entryId: string): PublishResponse {
+    return this.toResponse(this.findEntry(entryId));
+  }
+
+  getVersion(entryId: string, version: number): ExchangeVersionResponse {
+    const entry = this.findEntry(entryId);
+    const found = entry.versions.find((v) => v.version === version);
+    if (!found) {
+      throw new NotFoundException(
+        `Version ${version} not found for entry '${entryId}'. Available versions: ${entry.versions.map((v) => v.version).join(', ')}`,
+      );
+    }
+    return {
+      entry_id: entry.entryId,
+      source_url: entry.sourceUrl,
+      site_title: entry.siteTitle,
+      ...this.toVersionSummary(found),
+    };
+  }
+
+  private findEntry(entryId: string): ExchangeEntry {
+    const entry = this.entriesStore.get(entryId);
+    if (!entry) {
+      throw new NotFoundException(
+        `Exchange entry '${entryId}' not found. Available entries: ${Array.from(this.entriesStore.keys()).join(', ') || 'None (publish an MCP first)'}`,
+      );
+    }
+    return entry;
+  }
+
+  private latestVersion(entry: ExchangeEntry): ExchangeVersion {
+    return entry.versions.reduce((a, b) => (b.version > a.version ? b : a));
+  }
+
+  private matchesQuery(entry: ExchangeEntry, q: string): boolean {
+    if (
+      entry.siteTitle.toLowerCase().includes(q) ||
+      entry.sourceUrl.toLowerCase().includes(q)
+    ) {
+      return true;
+    }
+    return this.latestVersion(entry).server.tools.some(
+      (tool) =>
+        tool.name.toLowerCase().includes(q) ||
+        tool.description.toLowerCase().includes(q),
+    );
+  }
+
+  private toSummary(entry: ExchangeEntry): ExchangeEntrySummary {
+    const latest = this.latestVersion(entry);
+    return {
+      entry_id: entry.entryId,
+      source_url: entry.sourceUrl,
+      site_title: entry.siteTitle,
+      description: latest.description,
+      latest_version: latest.version,
+      versions_count: entry.versions.length,
+      published_at: latest.publishedAt,
+      tool_names: latest.server.tools.map((t) => t.name),
+    };
+  }
+
+  private toVersionSummary(v: ExchangeVersion): PublishedVersionSummary {
+    return {
+      version: v.version,
+      published_at: v.publishedAt,
+      description: v.description,
+      server_id: v.server.serverId,
+      tools: v.server.tools,
+      call_endpoint: `/api/v1/servers/${v.server.serverId}/call`,
+    };
+  }
+
   private toResponse(entry: ExchangeEntry): PublishResponse {
     return {
       entry_id: entry.entryId,
       source_url: entry.sourceUrl,
       site_title: entry.siteTitle,
-      latest_version: Math.max(...entry.versions.map((v) => v.version)),
-      versions: entry.versions.map((v) => ({
-        version: v.version,
-        published_at: v.publishedAt,
-        description: v.description,
-        server_id: v.server.serverId,
-        tools: v.server.tools,
-        call_endpoint: `/api/v1/servers/${v.server.serverId}/call`,
-      })),
+      latest_version: this.latestVersion(entry).version,
+      versions: entry.versions.map((v) => this.toVersionSummary(v)),
     };
   }
 }

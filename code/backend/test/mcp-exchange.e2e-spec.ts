@@ -102,4 +102,83 @@ describe('McpExchangeController (e2e)', () => {
 
     expect(res.status).toBe(404);
   });
+
+  it('/api/v1/exchange/mcps (GET) should list published MCPs with their summary', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBe(1);
+
+    const entry = res.body[0];
+    expect(entry.source_url).toBe(mockHotelFileUrl);
+    expect(entry.site_title).toContain('Grand Hotel Basel');
+    expect(entry.latest_version).toBe(2);
+    expect(entry.versions_count).toBe(2);
+    expect(entry.description).toBe('Second publication');
+    expect(entry.tool_names).toContain('reserve_room');
+  });
+
+  it('/api/v1/exchange/mcps?q= (GET) should search by site and by capability', async () => {
+    const bySite = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps?q=grand%20hotel',
+    );
+    expect(bySite.status).toBe(200);
+    expect(bySite.body.length).toBe(1);
+
+    const byCapability = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps?q=reserve',
+    );
+    expect(byCapability.status).toBe(200);
+    expect(byCapability.body.length).toBe(1);
+
+    const noMatch = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps?q=zzz-no-such-thing',
+    );
+    expect(noMatch.status).toBe(200);
+    expect(noMatch.body.length).toBe(0);
+  });
+
+  it('/api/v1/exchange/mcps/:entryId (GET) should return the detail with versions and tools', async () => {
+    const list = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+    const entryId = list.body[0].entry_id;
+
+    const res = await request(app.getHttpServer()).get(
+      `/api/v1/exchange/mcps/${entryId}`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.entry_id).toBe(entryId);
+    expect(res.body.versions.length).toBe(2);
+    const toolNames = res.body.versions[0].tools.map((t: any) => t.name);
+    expect(toolNames).toContain('check_availability');
+    expect(toolNames).toContain('reserve_room');
+  });
+
+  it('/api/v1/exchange/mcps/:entryId/versions/:n (GET) should return one version with its tools', async () => {
+    const list = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+    const entryId = list.body[0].entry_id;
+
+    const res = await request(app.getHttpServer()).get(
+      `/api/v1/exchange/mcps/${entryId}/versions/1`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.version).toBe(1);
+    expect(res.body.description).toBe('Grand Hotel Basel booking');
+    expect(res.body.server_id).toBe(serverId);
+    expect(res.body.tools.length).toBeGreaterThan(0);
+    expect(res.body.call_endpoint).toContain(serverId);
+
+    const missing = await request(app.getHttpServer()).get(
+      `/api/v1/exchange/mcps/${entryId}/versions/99`,
+    );
+    expect(missing.status).toBe(404);
+  });
+
+  it('/api/v1/exchange/mcps/:entryId (GET) should 404 on an unknown entry', async () => {
+    const res = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps/ex_unknown_00000000',
+    );
+    expect(res.status).toBe(404);
+  });
 });

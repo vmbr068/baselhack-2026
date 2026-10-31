@@ -63,6 +63,7 @@ export class ExecutorService {
         args,
         confirmedByHuman,
         confirmationToken,
+        authSessionOverride,
         headless,
       );
     } catch (err: any) {
@@ -93,6 +94,7 @@ export class ExecutorService {
     args: Record<string, any>,
     confirmedByHuman?: boolean,
     confirmationToken?: string,
+    authSessionOverride?: AuthSessionData | string,
     headless = true,
   ): Promise<ToolCallResponse> {
     const toolDef = config.tools.find((t) => t.name === toolName);

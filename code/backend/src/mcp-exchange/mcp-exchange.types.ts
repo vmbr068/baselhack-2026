@@ -34,3 +34,20 @@ export interface PublishResponse {
   latest_version: number;
   versions: PublishedVersionSummary[];
 }
+
+export interface ExchangeEntrySummary {
+  entry_id: string;
+  source_url: string;
+  site_title: string;
+  description?: string;
+  latest_version: number;
+  versions_count: number;
+  published_at: string;
+  tool_names: string[];
+}
+
+export interface ExchangeVersionResponse extends PublishedVersionSummary {
+  entry_id: string;
+  source_url: string;
+  site_title: string;
+}

@@ -10,3 +10,5 @@ static/screenshots/*.png
 !static/screenshots/.gitkeep
 generated_servers/*.json
 !generated_servers/.gitkeep
+exchange_store/*.json
+!exchange_store/.gitkeep

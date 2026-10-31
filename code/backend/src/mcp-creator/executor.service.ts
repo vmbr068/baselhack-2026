@@ -7,6 +7,7 @@ import {
   assertAllowedSite,
   blockDisallowedNavigation,
 } from './site-allowlist.js';
+import { appendAuditEntry } from './audit-log.js';
 
 @Injectable()
 export class ExecutorService {
@@ -33,6 +34,57 @@ export class ExecutorService {
     config: MCPServerConfig,
     toolName: string,
     args: Record<string, any> = {},
+    confirmedByHuman?: boolean,
+    confirmationToken?: string,
+    headless = true,
+  ): Promise<ToolCallResponse> {
+    const entry = {
+      server_id: config.serverId,
+      hotel: config.hotelName,
+      tool: toolName,
+      arguments: args,
+      confirmed_by_human: Boolean(
+        confirmedByHuman === true ||
+        args.confirmed_by_human === true ||
+        args.confirmed_by_human === 'true',
+      ),
+    };
+    let res: ToolCallResponse;
+    try {
+      res = await this.run(
+        config,
+        toolName,
+        args,
+        confirmedByHuman,
+        confirmationToken,
+        headless,
+      );
+    } catch (err: any) {
+      await this.audit({ ...entry, status: 'error', error: err.message });
+      throw err;
+    }
+    await this.audit({
+      ...entry,
+      status: res.status,
+      success: res.success,
+      error: res.error,
+      executed_via: res.executedVia,
+      data: res.data,
+    });
+    return res;
+  }
+
+  // An audit write failure must not break the agent's tool call.
+  private async audit(entry: Record<string, unknown>): Promise<void> {
+    await appendAuditEntry(entry).catch((e) =>
+      this.logger.error(`Audit log write failed: ${e.message}`),
+    );
+  }
+
+  private async run(
+    config: MCPServerConfig,
+    toolName: string,
+    args: Record<string, any>,
     confirmedByHuman?: boolean,
     confirmationToken?: string,
     headless = true,
@@ -84,7 +136,7 @@ export class ExecutorService {
       const summary = `Human approval required: Book '${args.room_title || 'Selected Room'}' at '${config.hotelName}' for ${args.guest_name || 'Guest'} (${args.guest_email || 'No email specified'}).`;
 
       this.logger.warn(
-        `[GUARDRAIL] Execution blocked for irreversible action '${toolName}' on '${config.hotelName}'. Pending token: ${generatedToken}`,
+        `[GUARDRAIL] Execution blocked for irreversible action '${toolName}' on '${config.hotelName}'. Awaiting human confirmation.`,
       );
 
       return {

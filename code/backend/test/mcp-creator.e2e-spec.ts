@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import * as path from 'node:path';
+import * as fs from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { AppModule } from './../src/app.module.js';
 
@@ -167,6 +168,25 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.body.status).toBe('executed');
     expect(res.body.data.status).toBe('confirmed');
   }, 30000);
+
+  it('should keep a redacted audit trail of tool calls and confirmations', async () => {
+    const lines = (
+      await fs.readFile(
+        path.resolve(process.cwd(), 'audit_logs/tool-calls.jsonl'),
+        'utf-8',
+      )
+    )
+      .trim()
+      .split('\n');
+    const entries = lines.map((l) => JSON.parse(l));
+    const reserves = entries.filter((e) => e.tool === 'reserve_room');
+
+    expect(reserves.at(-3).status).toBe('pending_confirmation');
+    expect(reserves.at(-2).confirmed_by_human).toBe(true);
+    expect(reserves.at(-2).status).toBe('executed');
+    expect(reserves.at(-2).time).toBeDefined();
+    expect(lines.join('\n')).not.toContain(pendingToken);
+  });
 
   it('/mock-wp/wp-json (GET) should serve mock WordPress REST API schema', async () => {
     const res = await request(app.getHttpServer()).get('/mock-wp/wp-json');

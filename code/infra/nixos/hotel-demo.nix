@@ -1,6 +1,5 @@
 {
   pkgs,
-  lib,
   config,
   hotelDemoSrc,
   ...
@@ -68,7 +67,7 @@ in
       StateDirectory = "hotel-demo";
       WorkingDirectory = apiDir;
       ExecStartPre = initDatabase;
-      ExecStart = "${lib.getExe pkgs.nodejs_24} ${tsx} src/index.ts";
+      ExecStart = "${tsx} src/index.ts";
       Restart = "on-failure";
       RestartSec = 5;
     };

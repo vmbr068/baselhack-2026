@@ -254,6 +254,17 @@ h1, h2, h3 { font-family: 'Adobe Clean', 'Source Sans Pro', 'Segoe UI', sans-ser
 .source-choice > svg { color: #888; }
 .source-choice .source-mark { width: 29px; height: 29px; flex-basis: 29px; font-size: 10px; }
 .inline-notice { display: flex; align-items: center; gap: 7px; margin-top: 12px; padding: 10px; border-radius: 6px; color: #287253; background: #eaf7ef; text-align: left; font-size: 10px; }
+.generated-tools { display: grid; gap: 8px; margin: 22px 0; text-align: left; }
+.generated-tools > strong { color: #555; font-size: 11px; }
+.generated-tools > span { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid #e8e8e8; border-radius: 7px; color: #777; font-size: 10px; text-align: left; }
+.generated-tools code { color: #303030; font-size: 11px; }
+.enrich-form { display: grid; gap: 12px; margin: 18px 0; padding: 16px; border: 1px solid #e7e7e7; border-radius: 9px; background: #fff; text-align: left; }
+.enrich-form label { display: grid; gap: 6px; color: #555; font-size: 10px; }
+.enrich-form input, .enrich-form select { width: 100%; min-height: 37px; padding: 8px 10px; border: 1px solid #dedede; border-radius: 6px; background: white; color: #292929; font: inherit; font-size: 11px; }
+.enrich-fields { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; }
+.enrich-form .primary-button { justify-self: start; }
+.api-error { margin: 12px auto; padding: 11px 13px; border: 1px solid #efcaca; border-radius: 7px; background: #fff3f2; color: #9e3030; font-size: 11px; text-align: left; }
+.route-copy small { color: #999; font-size: 8px; }
 .back-link { margin-top: 15px; }
 
 /* Authentication */

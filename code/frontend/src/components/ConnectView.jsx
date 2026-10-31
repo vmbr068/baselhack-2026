@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   IconPlus,
   IconCheck,
-  IconGlobe,
   IconLightning,
   IconExternalLink,
 } from './Icons'
@@ -23,6 +22,12 @@ export default function ConnectView({
   const [branch, setBranch] = useState('main')
   const [showEnrichForm, setShowEnrichForm] = useState(false)
 
+  // A new result starts with a closed enrichment form; so does a successful run.
+  useEffect(() => {
+    setShowEnrichForm(false)
+    setRepoUrl('')
+  }, [generated])
+
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!url.trim()) return
@@ -32,6 +37,8 @@ export default function ConnectView({
   const handleSuggestion = (suggestedUrl) => {
     setUrl(suggestedUrl)
   }
+
+  const toolCount = generated?.tools?.length || 0
 
   return (
     <div className="connect-view">
@@ -50,6 +57,7 @@ export default function ConnectView({
                 type="url"
                 className="pill-input"
                 placeholder="https://votre-site.com"
+                aria-label="URL du site à connecter"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 required
@@ -87,17 +95,7 @@ export default function ConnectView({
           </div>
 
           {error && (
-            <div
-              style={{
-                marginTop: 24,
-                padding: '12px 20px',
-                borderRadius: 'var(--radius-pill)',
-                background: 'rgba(235, 16, 0, 0.12)',
-                color: 'var(--accent-red)',
-                fontSize: 13,
-                fontWeight: 500,
-              }}
-            >
+            <div className="connect-error" role="alert">
               {error}
             </div>
           )}
@@ -153,7 +151,7 @@ export default function ConnectView({
             <div className="routes-detected-header">
               <span>Outils et routes IA détectés</span>
               <span style={{ color: 'var(--accent-red)' }}>
-                {generated?.tools?.length || 0} routes actives
+                {toolCount} {toolCount > 1 ? 'routes actives' : 'route active'}
               </span>
             </div>
             {(generated?.tools || []).map((tool, idx) => (
@@ -195,11 +193,12 @@ export default function ConnectView({
                   }
                 }}
               >
-                <div className="pill-input-wrapper" style={{ height: 42, maxWidth: '100%' }}>
+                <div className="pill-input-wrapper" style={{ flex: 'none', height: 42, maxWidth: '100%' }}>
                   <input
                     type="url"
                     className="pill-input"
                     placeholder="https://github.com/mon-organisation/mon-site"
+                    aria-label="URL du dépôt GitHub"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                     required
@@ -209,7 +208,7 @@ export default function ConnectView({
                   <button
                     type="submit"
                     className="pill-submit-btn"
-                    style={{ height: 38, fontSize: 13 }}
+                    style={{ height: 38, fontSize: 13, width: 'auto' }}
                     disabled={busy}
                   >
                     {busy ? 'Enrichissement…' : 'Valider l’enrichissement'}
@@ -226,12 +225,21 @@ export default function ConnectView({
             )}
           </div>
 
+          {error && (
+            <div className="connect-error" role="alert">
+              {error}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="success-actions-row">
             <button
               type="button"
               className="suggestion-chip"
-              onClick={onReset}
+              onClick={() => {
+                setUrl('')
+                onReset()
+              }}
               style={{ padding: '8px 16px' }}
             >
               Connecter un autre site
@@ -239,7 +247,7 @@ export default function ConnectView({
             <button
               type="button"
               className="pill-submit-btn"
-              style={{ height: 40, fontSize: 13 }}
+              style={{ height: 40, fontSize: 13, width: 'auto' }}
               onClick={onGoToManagement}
             >
               <span>Accéder aux serveurs MCP</span>

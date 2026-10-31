@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   AdobeLogo,
   IconHelp,
@@ -8,7 +8,6 @@ import {
   IconMoon,
   IconSun,
   IconClose,
-  IconExternalLink,
 } from './Icons'
 
 export default function Header({
@@ -16,18 +15,45 @@ export default function Header({
   setColorScheme,
   onNavigateHome,
   notifications = [],
-  t,
+  currentUser,
+  onNavigate,
 }) {
-  const [showHelp, setShowHelp] = useState(false)
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [showApps, setShowApps] = useState(false)
+  const [openPopover, setOpenPopover] = useState(null) // 'help' | 'notifications' | 'apps' | 'profile'
+  const headerRef = useRef(null)
+  const showHelp = openPopover === 'help'
+  const showNotifications = openPopover === 'notifications'
+  const showApps = openPopover === 'apps'
+  const showProfile = openPopover === 'profile'
+  const togglePopover = (name) => setOpenPopover((current) => (current === name ? null : name))
+  const closePopover = () => setOpenPopover(null)
+
+  useEffect(() => {
+    if (!openPopover) return undefined
+    const handlePointerDown = (e) => {
+      if (!headerRef.current?.contains(e.target)) closePopover()
+    }
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') closePopover()
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [openPopover])
+
+  const openApp = (page) => {
+    onNavigate(page)
+    closePopover()
+  }
 
   const toggleTheme = () => {
     setColorScheme(prev => (prev === 'dark' ? 'light' : 'dark'))
   }
 
   return (
-    <header className="adobe-header">
+    <header className="adobe-header" ref={headerRef}>
       <div className="adobe-header-left">
         <button
           className="adobe-logo-btn"
@@ -53,11 +79,7 @@ export default function Header({
         {/* Help Button */}
         <button
           className={`header-icon-btn ${showHelp ? 'active' : ''}`}
-          onClick={() => {
-            setShowHelp(!showHelp)
-            setShowNotifications(false)
-            setShowApps(false)
-          }}
+          onClick={() => togglePopover('help')}
           title="Aide & Protocole MCP"
           aria-label="Aide"
         >
@@ -67,11 +89,7 @@ export default function Header({
         {/* Notifications Button */}
         <button
           className={`header-icon-btn ${showNotifications ? 'active' : ''}`}
-          onClick={() => {
-            setShowNotifications(!showNotifications)
-            setShowHelp(false)
-            setShowApps(false)
-          }}
+          onClick={() => togglePopover('notifications')}
           title="Notifications"
           aria-label="Notifications"
         >
@@ -82,11 +100,7 @@ export default function Header({
         {/* Apps Grid */}
         <button
           className={`header-icon-btn ${showApps ? 'active' : ''}`}
-          onClick={() => {
-            setShowApps(!showApps)
-            setShowHelp(false)
-            setShowNotifications(false)
-          }}
+          onClick={() => togglePopover('apps')}
           title="Applications"
           aria-label="Menu des applications"
         >
@@ -95,8 +109,9 @@ export default function Header({
 
         {/* Profile Avatar */}
         <button
-          className="profile-avatar-btn"
-          title="Profil Alex Laurent"
+          className={`profile-avatar-btn ${showProfile ? 'active' : ''}`}
+          onClick={() => togglePopover('profile')}
+          title={currentUser?.name || currentUser?.email || 'Compte'}
           aria-label="Compte utilisateur"
         >
           <IconUser size={18} />
@@ -108,7 +123,7 @@ export default function Header({
         <div className="adobe-popover" role="dialog" aria-label="Aide">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="popover-title">Passerelle MCP pour IA</span>
-            <button onClick={() => setShowHelp(false)} className="header-icon-btn" style={{ width: 28, height: 28 }}>
+            <button type="button" aria-label="Fermer" onClick={closePopover} className="header-icon-btn" style={{ width: 28, height: 28 }}>
               <IconClose size={16} />
             </button>
           </div>
@@ -126,7 +141,7 @@ export default function Header({
         <div className="adobe-popover" role="dialog" aria-label="Notifications">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="popover-title">Activité récente</span>
-            <button onClick={() => setShowNotifications(false)} className="header-icon-btn" style={{ width: 28, height: 28 }}>
+            <button type="button" aria-label="Fermer" onClick={closePopover} className="header-icon-btn" style={{ width: 28, height: 28 }}>
               <IconClose size={16} />
             </button>
           </div>
@@ -151,22 +166,33 @@ export default function Header({
         <div className="adobe-popover" role="dialog" aria-label="Applications">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="popover-title">Outils MCP</span>
-            <button onClick={() => setShowApps(false)} className="header-icon-btn" style={{ width: 28, height: 28 }}>
+            <button type="button" aria-label="Fermer" onClick={closePopover} className="header-icon-btn" style={{ width: 28, height: 28 }}>
               <IconClose size={16} />
             </button>
           </div>
-          <div className="popover-item" style={{ cursor: 'pointer' }}>
+          <button type="button" className="popover-item" onClick={() => openApp('home')}>
             <span style={{ fontWeight: 700, color: 'var(--accent-red)' }}>⚡</span>
-            <span>MCP Studio</span>
-          </div>
-          <div className="popover-item" style={{ cursor: 'pointer' }}>
+            <span>Créer un MCP</span>
+          </button>
+          <button type="button" className="popover-item" onClick={() => openApp('servers')}>
             <span style={{ fontWeight: 700, color: 'var(--blue)' }}>🔗</span>
-            <span>Claude Connector</span>
+            <span>Mes serveurs MCP</span>
+          </button>
+        </div>
+      )}
+
+      {/* Profile Popover */}
+      {showProfile && (
+        <div className="adobe-popover" role="dialog" aria-label="Compte">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="popover-title">Compte</span>
+            <button type="button" aria-label="Fermer" onClick={closePopover} className="header-icon-btn" style={{ width: 28, height: 28 }}>
+              <IconClose size={16} />
+            </button>
           </div>
-          <div className="popover-item" style={{ cursor: 'pointer' }}>
-            <span style={{ fontWeight: 700, color: 'var(--purple)' }}>📊</span>
-            <span>Audit & Logs IA</span>
-          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', overflowWrap: 'anywhere' }}>
+            {currentUser ? currentUser.email : 'Vous n’êtes pas connecté.'}
+          </p>
         </div>
       )}
     </header>

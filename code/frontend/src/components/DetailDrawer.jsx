@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { getMcpEndpoint } from '../api'
 import {
   IconClose,
   IconCopy,
@@ -19,13 +20,29 @@ export default function DetailDrawer({
   copiedId,
 }) {
   const [busyTool, setBusyTool] = useState(null)
+  const [busyServer, setBusyServer] = useState(false)
+  const closeButton = useRef(null)
+  const latestOnClose = useRef(onClose)
+  latestOnClose.current = onClose
+
+  // Runs once per opening, so that re-renders do not steal the focus.
+  useEffect(() => {
+    const previousFocus = document.activeElement
+    closeButton.current?.focus()
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') latestOnClose.current()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      previousFocus?.focus?.()
+    }
+  }, [])
 
   if (!server) return null
 
   // MCP endpoint URL to give to Claude or agents
-  const endpointUrl = `${window.location.origin}/api/v1/servers/${encodeURIComponent(
-    server.id
-  )}`
+  const endpointUrl = getMcpEndpoint(server.id)
 
   const tools = server.tools || []
   const activeToolsCount = tools.filter((t) => t.enabled !== false).length
@@ -39,6 +56,15 @@ export default function DetailDrawer({
     }
   }
 
+  const handleServerToggle = async (nextVal) => {
+    setBusyServer(true)
+    try {
+      await onToggleServer(server, nextVal)
+    } finally {
+      setBusyServer(false)
+    }
+  }
+
   return (
     <div
       className="drawer-backdrop"
@@ -46,7 +72,7 @@ export default function DetailDrawer({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <aside className="drawer-panel" role="dialog" aria-label={server.name}>
+      <aside className="drawer-panel" role="dialog" aria-modal="true" aria-label={server.name}>
         {/* Drawer Header */}
         <div className="drawer-header">
           <div className="drawer-header-left">
@@ -54,6 +80,7 @@ export default function DetailDrawer({
             <h2 className="drawer-title">{server.name}</h2>
           </div>
           <button
+            ref={closeButton}
             type="button"
             className="header-icon-btn"
             onClick={onClose}
@@ -71,7 +98,7 @@ export default function DetailDrawer({
               Endpoint MCP (pour Claude Desktop, Cursor & Agents IA)
             </span>
             <div className="server-endpoint-row">
-              <span className="server-endpoint-code">{endpointUrl}</span>
+              <span className="server-endpoint-code" title={endpointUrl}>{endpointUrl}</span>
               <button
                 type="button"
                 className="btn-inline-copy"
@@ -97,8 +124,10 @@ export default function DetailDrawer({
               <label className="custom-switch">
                 <input
                   type="checkbox"
+                  aria-label="Activer le serveur MCP"
                   checked={server.enabled !== false}
-                  onChange={(e) => onToggleServer(server, e.target.checked)}
+                  disabled={busyServer}
+                  onChange={(e) => handleServerToggle(e.target.checked)}
                 />
                 <span className="custom-switch-slider" />
               </label>
@@ -149,6 +178,7 @@ export default function DetailDrawer({
                     <label className="custom-switch">
                       <input
                         type="checkbox"
+                        aria-label={`Activer la route ${tool.name}`}
                         checked={isEnabled}
                         disabled={busyTool === tool.name}
                         onChange={(e) => handleToolToggle(tool, e.target.checked)}
@@ -173,9 +203,9 @@ export default function DetailDrawer({
               Source d'analyse & enrichissement
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Source actuelle : <strong>{server.source || 'Site Web'}</strong>
+              Source actuelle : <strong>{!server.source || server.source === 'Website' ? 'Site Web' : server.source}</strong>
               {server.codebaseEnrichment ? (
-                <div style={{ marginTop: 4, color: 'var(--green)' }}>
+                <div style={{ marginTop: 4, color: 'var(--green-text)' }}>
                   ✓ Codebase enrichie depuis {server.codebaseEnrichment.source}
                 </div>
               ) : (
@@ -202,7 +232,7 @@ export default function DetailDrawer({
           <button
             type="button"
             className="pill-submit-btn"
-            style={{ height: 36, fontSize: 12 }}
+            style={{ height: 36, fontSize: 12, width: 'auto' }}
             onClick={onClose}
           >
             Terminé

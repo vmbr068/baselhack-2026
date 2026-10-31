@@ -27,6 +27,7 @@ export default function Rail({ activePage, setPage, onNewMcp }) {
           onClick={() => setPage('home')}
           title="Accueil / Connecter"
           aria-label="Accueil"
+          aria-current={activePage === 'home' ? 'page' : undefined}
         >
           <IconHome size={22} />
         </button>
@@ -37,6 +38,7 @@ export default function Rail({ activePage, setPage, onNewMcp }) {
           onClick={() => setPage('servers')}
           title="Gestion des serveurs MCP"
           aria-label="Serveurs MCP"
+          aria-current={activePage === 'servers' ? 'page' : undefined}
         >
           <IconServers size={22} />
         </button>

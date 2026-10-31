@@ -25,12 +25,8 @@ deploys them within minutes. Changes in `terraform/` or to the VM size in
 
 ## Secrets
 
-`secrets/tofu.yaml` holds the Proxmox token, the state passphrase, and the basic
-auth password with its bcrypt hash. Read it with `sops decrypt secrets/tofu.yaml`.
-
-`tf apply` writes the hash to `/etc/caddy-secrets/env` only when it installs the
-VM. To change the password on a running VM, update that file too and restart
-Caddy.
+`secrets/tofu.yaml` holds the Proxmox token and the state passphrase. Read it with
+`sops decrypt secrets/tofu.yaml`.
 
 ## Not kept across a rebuild
 

@@ -58,6 +58,22 @@
         "type": "github"
       }
     },
+    "hotel-demo": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793434912,
+        "narHash": "sha256-jqCs8WfQnXAf2WUyG+I38jXvVPBqbfEMUBXnpCJ4e2M=",
+        "owner": "agrand2004",
+        "repo": "hotel-website-demo",
+        "rev": "6ce5c4e784fac334493b89018481265a82420d1c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "agrand2004",
+        "repo": "hotel-website-demo",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1770107345,
@@ -94,6 +110,7 @@
       "inputs": {
         "comin": "comin",
         "disko": "disko",
+        "hotel-demo": "hotel-demo",
         "nixpkgs": "nixpkgs_2"
       }
     },

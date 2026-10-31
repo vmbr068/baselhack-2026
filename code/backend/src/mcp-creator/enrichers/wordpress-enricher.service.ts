@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { MCPServerConfig, MCPToolDefinition } from '../mcp-creator.types.js';
+import { assertAllowedSite } from '../site-allowlist.js';
 
 interface WpRouteEndpoint {
   methods: string[];
@@ -28,6 +29,7 @@ export class WordpressEnricherService {
   }> {
     let baseUrl = customWpUrl || config.targetUrl;
     baseUrl = baseUrl.replace(/\/+$/, '');
+    assertAllowedSite(baseUrl);
 
     const wpJsonUrl = baseUrl.endsWith('/wp-json')
       ? baseUrl
@@ -41,6 +43,7 @@ export class WordpressEnricherService {
     try {
       const res = await fetch(wpJsonUrl, {
         headers: { Accept: 'application/json' },
+        redirect: 'error',
         signal: AbortSignal.timeout(10000),
       });
 

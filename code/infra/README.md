@@ -23,6 +23,11 @@ Merging to `main` is enough for the NixOS configuration, backend and frontend: c
 deploys them within minutes. Changes in `terraform/` or to the VM size in
 `server.json` need `tf apply`.
 
+The demo site lives in its own repository and is pinned in `flake.lock`, so its
+changes are not deployed automatically. To deploy them, run
+`nix flake update hotel-demo`, update `hash` in `nixos/hotel-demo-package.nix` if
+its dependencies changed, then merge.
+
 ## Secrets
 
 `secrets/tofu.yaml` holds the Proxmox token and the state passphrase. Read it with
@@ -31,4 +36,5 @@ deploys them within minutes. Changes in `terraform/` or to the VM size in
 ## Not kept across a rebuild
 
 Generated MCPs and screenshots in `/var/lib/mcp-exchange-backend` are lost. Call
-`/api/v1/generate` again to recreate them.
+`/api/v1/generate` again to recreate them. Demo site bookings are lost too, and
+its rooms are seeded again.

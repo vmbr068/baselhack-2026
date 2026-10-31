@@ -76,6 +76,17 @@ export class ScannerService {
         );
       }
       await page.waitForTimeout(1000);
+      // Wait for any SPA / hydration to settle if inputs are not immediately present
+      const initialInputCount = await page.$$eval(
+        'input, select, textarea',
+        (els) => els.length,
+      );
+      if (initialInputCount === 0) {
+        await page
+          .waitForSelector('input, select, textarea, button', { timeout: 3000 })
+          .catch(() => {});
+        await page.waitForTimeout(500);
+      }
 
       const title = await page.title();
 

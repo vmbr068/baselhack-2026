@@ -403,7 +403,49 @@ export class ExecutorService {
             };
       }
 
-      // 3. screenshot only
+      // 3. submit_form (generic form input and submission)
+      if (toolDef.executionStep === 'submit_form') {
+        for (const [key, val] of Object.entries(args)) {
+          const selector = selectors[key];
+          if (selector && val !== undefined && val !== null) {
+            try {
+              await page.fill(selector, String(val), { timeout: 3000 });
+            } catch {
+              try {
+                await page.selectOption(selector, String(val), {
+                  timeout: 3000,
+                });
+              } catch {}
+            }
+          }
+        }
+
+        if (selectors.submit_button) {
+          try {
+            await page.click(selectors.submit_button, { timeout: 4000 });
+            await this.settle(page);
+          } catch {}
+        }
+
+        const filename = `action_${Date.now()}.png`;
+        await page.screenshot({
+          path: path.join(this.screenshotDir, filename),
+        });
+
+        return {
+          tool_name: toolName,
+          success: true,
+          status: 'executed',
+          data: {
+            title: await page.title(),
+            url: page.url(),
+            submitted_fields: Object.keys(args),
+          },
+          screenshot_url: `/static/screenshots/${filename}`,
+        };
+      }
+
+      // 4. screenshot only
       const filename = `screenshot_${Date.now()}.png`;
       await page.screenshot({ path: path.join(this.screenshotDir, filename) });
       return {

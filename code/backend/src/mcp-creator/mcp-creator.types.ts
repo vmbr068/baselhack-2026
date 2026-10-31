@@ -59,7 +59,11 @@ export interface MCPToolDefinition {
   description: string;
   enabled?: boolean;
   parameters: Record<string, any>;
-  executionStep: 'check_availability' | 'reserve_room' | 'get_screenshot';
+  executionStep:
+    | 'check_availability'
+    | 'reserve_room'
+    | 'get_screenshot'
+    | 'submit_form';
   selectorsMapping: Record<string, string>;
   executionMode?: 'browser' | 'api' | 'hybrid';
   apiEndpoint?: string;

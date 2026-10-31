@@ -23,6 +23,17 @@ from executor import execute_tool
 
 console = Console()
 
+def confirm_reservation(arguments):
+    console.print(
+        f"\nReservation requested: {arguments.get('room_title', 'selected room')} "
+        f"for {arguments.get('guest_name', 'guest')} ({arguments.get('guest_email', 'no email')})."
+    )
+    return Prompt.ask(
+        "Type 'confirm' to submit this fictional booking",
+        choices=["confirm", "cancel"],
+        default="cancel",
+    ) == "confirm"
+
 async def simulate_agent_turn(user_message: str, server_id: str = "mcp_grand_hotel_basel"):
     """
     Connects an AI Agent reasoning loop to the generated MCP tools.
@@ -76,9 +87,14 @@ async def simulate_agent_turn(user_message: str, server_id: str = "mcp_grand_hot
                 fn = part.function_call
                 console.print(f"\n[bold yellow]🤖 Agent decided to invoke MCP Tool:[/bold yellow] [cyan]{fn.name}[/cyan]")
                 console.print(f"Arguments: {fn.args}")
+
+                arguments = dict(fn.args)
+                if fn.name == "reserve_room" and not confirm_reservation(arguments):
+                    console.print("[yellow]Booking cancelled; no reservation was submitted.[/yellow]")
+                    return
                 
                 # Execute tool via our Playwright engine
-                tool_res = await execute_tool(config, fn.name, dict(fn.args))
+                tool_res = await execute_tool(config, fn.name, arguments)
                 console.print(f"[bold green]✓ Playwright Execution Success:[/bold green] {tool_res.success}")
                 if tool_res.screenshot_url:
                     console.print(f"📸 Screenshot: http://localhost:8000{tool_res.screenshot_url}")
@@ -104,10 +120,13 @@ async def simulate_agent_turn(user_message: str, server_id: str = "mcp_grand_hot
             console.print(f"[bold yellow]🤖 Agent invoking MCP Tool:[/bold yellow] [cyan]reserve_room[/cyan]")
             args = {
                 "room_title": "Deluxe Rhine View Suite",
-                "guest_name": "Sacha Ramstein",
-                "guest_email": "sacha@baselhack.ch",
+                "guest_name": "Ada Example",
+                "guest_email": "ada@example.invalid",
                 "special_requests": "Vue sur le Rhin"
             }
+            if not confirm_reservation(args):
+                console.print("[yellow]Réservation annulée ; aucune réservation n'a été envoyée.[/yellow]")
+                return
             res = await execute_tool(config, "reserve_room", args)
             console.print(Panel(
                 f"[bold green]Réservation confirmée avec succès ![/bold green]\n\n"

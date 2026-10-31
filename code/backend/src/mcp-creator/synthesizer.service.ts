@@ -37,6 +37,7 @@ export class SynthesizerService {
         inputsDetected: scan.inputs.length,
         buttonsDetected: scan.buttons.length,
         roomsDetected: scan.detectedRooms.length,
+        screenshotPath: scan.screenshotPath,
         isHotelSite,
       },
     };

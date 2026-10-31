@@ -17,6 +17,7 @@ export default function ConnectView({
   onReset,
   onGoToManagement,
   onEnrich,
+  t,
 }) {
   const [url, setUrl] = useState('')
   const [repoUrl, setRepoUrl] = useState('')
@@ -44,13 +45,11 @@ export default function ConnectView({
 
   return (
     <div className="connect-view">
-      {/* 1. IDLE STATE: EXACT MATCH FIGMA */}
+      {/* 1. IDLE STATE: EXACT FIGMA MOCKUP */}
       {stage === 'idle' && (
         <>
-          <h1 className="connect-heading">Que souhaitez-vous connecter ?</h1>
-          <p className="connect-subheading">
-            Votre passerelle de votre site vers les agents IA
-          </p>
+          <h1 className="connect-heading">{t.heading}</h1>
+          <p className="connect-subheading">{t.subheading}</p>
 
           <form className="connect-form" onSubmit={handleSubmit}>
             <div className="pill-input-wrapper">
@@ -58,8 +57,8 @@ export default function ConnectView({
                 id="site-url-input"
                 type="url"
                 className="pill-input"
-                placeholder="https://votre-site.com"
-                aria-label="URL du site à connecter"
+                placeholder={t.placeholder}
+                aria-label={t.placeholder}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 required
@@ -73,7 +72,7 @@ export default function ConnectView({
               disabled={busy || !url.trim()}
             >
               {isInteractive ? <IconLock size={18} /> : <IconPlus size={18} />}
-              <span>{isInteractive ? 'Ouvrir Sandbox & Connecter' : 'Construire le MCP'}</span>
+              <span>{isInteractive ? t.openSandbox : t.buildMcp}</span>
             </button>
           </form>
 
@@ -117,26 +116,26 @@ export default function ConnectView({
               }}
             >
               <IconLock size={14} />
-              <span>Ouvrir une sandbox pour se connecter (SSO / Login / Authentification)</span>
+              <span>{t.interactiveToggle}</span>
             </label>
           </div>
 
           {/* Quick Demo Suggestions */}
           <div className="connect-suggestions">
-            <span>Suggestions rapides :</span>
+            <span>{t.suggestions}</span>
             <button
               type="button"
               className="suggestion-chip"
               onClick={() => handleSuggestion('https://hotel.bh2026.tekitup.net')}
             >
-              Grand Hôtel Basel (Démo)
+              {t.demoHotel}
             </button>
             <button
               type="button"
               className="suggestion-chip"
               onClick={() => handleSuggestion('http://localhost:3000')}
             >
-              Hôtel Local (:3000)
+              {t.demoLocal}
             </button>
           </div>
 
@@ -148,146 +147,123 @@ export default function ConnectView({
         </>
       )}
 
-      {/* 2. ANALYZING / LOADING STATE */}
+      {/* 2. ANALYZING STATE: SEAMLESS DIRECT IN CANVAS (NO NESTED CARD) */}
       {stage === 'analyzing' && (
-        <div className="analysis-progress-card">
+        <div className="canvas-state-direct">
           <div className="radar-spinner" />
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-            Analyse et construction du MCP en cours
+          <h2 className="connect-heading" style={{ fontSize: 26, marginTop: 12 }}>
+            {t.analyzingTitle}
           </h2>
           <span className="analysis-target-url">{analyzedUrl}</span>
 
-          <div className="analysis-steps">
-            <div className="analysis-step-item done">
-              <span className="step-indicator">✓</span>
-              <span>1. Connexion au site web & capture DOM</span>
-            </div>
-            {isInteractive && (
-              <div
-                style={{
-                  padding: '8px 14px',
-                  background: 'rgba(235, 16, 0, 0.08)',
-                  borderRadius: 'var(--radius-pill)',
-                  border: '1px solid rgba(235, 16, 0, 0.2)',
-                  color: 'var(--accent-red)',
-                  fontSize: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <IconLock size={14} />
-                <span>Une fenêtre de navigation sandbox est ouverte. Connectez-vous sur le site, elle se fermera automatiquement !</span>
-              </div>
-            )}
-            <div className="analysis-step-item active">
-              <span className="step-indicator">2</span>
-              <span>2. Détection des formulaires & actions</span>
-            </div>
-            <div className="analysis-step-item">
-              <span className="step-indicator">3</span>
-              <span>3. Génération des outils MCP & schéma JSON</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. GENERATION RESULT STATE */}
-      {stage === 'result' && (
-        <div className="generated-success-view">
-          <div className="success-badge-row">
-            <span className="success-badge">
-              <IconCheck size={14} />
-              MCP généré avec succès
+          <div className="seamless-steps-row">
+            <span className="seamless-step done">
+              <span className="step-num">✓</span> {t.step1}
+            </span>
+            <span className="step-separator">›</span>
+            <span className="seamless-step active">
+              <span className="step-num">2</span> {t.step2}
+            </span>
+            <span className="step-separator">›</span>
+            <span className="seamless-step">
+              <span className="step-num">3</span> {t.step3}
             </span>
           </div>
 
-          <h2 className="success-title">
-            {generated?.hotel_name || generated?.name || 'Votre serveur MCP est prêt'}
+          {isInteractive && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: '8px 14px',
+                background: 'rgba(235, 16, 0, 0.08)',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid rgba(235, 16, 0, 0.2)',
+                color: 'var(--accent-red)',
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <IconLock size={14} />
+              <span>{t.sandboxBanner}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. RESULT STATE: SEAMLESS DIRECT IN CANVAS (NO NESTED CARD) */}
+      {stage === 'result' && (
+        <div className="canvas-state-direct">
+          <span className="success-badge">
+            <IconCheck size={14} />
+            {t.resultSuccess}
+          </span>
+
+          <h2 className="connect-heading" style={{ fontSize: 28, marginTop: 8 }}>
+            {generated?.hotel_name || generated?.name || t.resultReady}
           </h2>
-          <p className="success-subtitle">
-            Le connecteur MCP de base a été synthétisé à partir de{' '}
-            <strong style={{ color: 'var(--text-primary)' }}>{analyzedUrl}</strong>. Les agents IA peuvent désormais interagir avec ce site en toute sécurité.
+          <p className="connect-subheading" style={{ maxWidth: 540, marginBottom: 20 }}>
+            {t.resultDesc(analyzedUrl)}
           </p>
 
-          {/* Routes Detected */}
-          <div className="routes-detected-box">
-            <div className="routes-detected-header">
-              <span>Outils et routes IA détectés</span>
-              <span style={{ color: 'var(--accent-red)' }}>
-                {toolCount} {toolCount > 1 ? 'routes actives' : 'route active'}
-              </span>
-            </div>
+          {/* Detected routes pills */}
+          <div className="detected-routes-pills">
             {(generated?.tools || []).map((tool, idx) => (
-              <div key={idx} className="route-detected-tag">
-                <IconLightning size={14} />
+              <span key={idx} className="detected-route-pill">
+                <IconLightning size={13} />
                 <code>{tool.name}</code>
-                <span style={{ color: 'var(--text-secondary)' }}>— {tool.description}</span>
-              </div>
+              </span>
             ))}
           </div>
 
-          {/* Deep Codebase Enrichment */}
-          <div className="enrichment-section">
-            <div className="enrichment-title">
-              Enrichir les outils avec le code source (facultatif)
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Connectez le dépôt GitHub de votre site pour extraire les routes API internes et éliminer toute friction.
-            </p>
-
-            {!showEnrichForm ? (
-              <div className="enrichment-buttons-row">
-                <button
-                  type="button"
-                  className="enrichment-btn"
-                  onClick={() => setShowEnrichForm(true)}
-                >
-                  <span style={{ fontSize: 16 }}>🐙</span>
-                  <span>Connecter un dépôt GitHub</span>
-                </button>
+          {/* Codebase Enrichment Inline (Optional) */}
+          {!showEnrichForm ? (
+            <button
+              type="button"
+              className="enrich-text-btn"
+              onClick={() => setShowEnrichForm(true)}
+            >
+              <span>+ {t.enrichPrompt}</span>
+            </button>
+          ) : (
+            <form
+              className="enrich-inline-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (repoUrl.trim()) {
+                  onEnrich('github', { repoUrl: repoUrl.trim(), branch: branch.trim() })
+                }
+              }}
+            >
+              <div className="pill-input-wrapper" style={{ height: 40, width: 340 }}>
+                <input
+                  type="url"
+                  className="pill-input"
+                  placeholder={t.enrichRepoPlaceholder}
+                  aria-label={t.enrichRepoPlaceholder}
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  required
+                />
               </div>
-            ) : (
-              <form
-                style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (repoUrl.trim()) {
-                    onEnrich('github', { repoUrl: repoUrl.trim(), branch: branch.trim() })
-                  }
-                }}
+              <button
+                type="submit"
+                className="pill-submit-btn"
+                style={{ height: 40, fontSize: 13, width: 'auto' }}
+                disabled={busy}
               >
-                <div className="pill-input-wrapper" style={{ flex: 'none', height: 42, maxWidth: '100%' }}>
-                  <input
-                    type="url"
-                    className="pill-input"
-                    placeholder="https://github.com/mon-organisation/mon-site"
-                    aria-label="URL du dépôt GitHub"
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    required
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    type="submit"
-                    className="pill-submit-btn"
-                    style={{ height: 38, fontSize: 13, width: 'auto' }}
-                    disabled={busy}
-                  >
-                    {busy ? 'Enrichissement…' : 'Valider l’enrichissement'}
-                  </button>
-                  <button
-                    type="button"
-                    className="suggestion-chip"
-                    onClick={() => setShowEnrichForm(false)}
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+                {busy ? t.enriching : t.enrichSubmit}
+              </button>
+              <button
+                type="button"
+                className="suggestion-chip"
+                onClick={() => setShowEnrichForm(false)}
+              >
+                {t.cancel}
+              </button>
+            </form>
+          )}
 
           {error && (
             <div className="connect-error" role="alert">
@@ -295,8 +271,8 @@ export default function ConnectView({
             </div>
           )}
 
-          {/* Actions */}
-          <div className="success-actions-row">
+          {/* Action buttons */}
+          <div className="result-actions-row">
             <button
               type="button"
               className="suggestion-chip"
@@ -304,9 +280,9 @@ export default function ConnectView({
                 setUrl('')
                 onReset()
               }}
-              style={{ padding: '8px 16px' }}
+              style={{ padding: '10px 18px', fontSize: 13 }}
             >
-              Connecter un autre site
+              {t.connectAnother}
             </button>
             <button
               type="button"
@@ -314,7 +290,7 @@ export default function ConnectView({
               style={{ height: 40, fontSize: 13, width: 'auto' }}
               onClick={onGoToManagement}
             >
-              <span>Accéder aux serveurs MCP</span>
+              <span>{t.goToManagement}</span>
               <IconExternalLink size={14} />
             </button>
           </div>

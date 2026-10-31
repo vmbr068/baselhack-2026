@@ -131,6 +131,7 @@ export interface GenerateResponse {
   hotel_name: string;
   target_url: string;
   tools: MCPToolDefinition[];
+  screenshot_url?: string | null;
   call_endpoint: string;
   has_auth_session?: boolean;
   mcp_schema: {

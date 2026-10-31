@@ -1,5 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class InteractiveLoginDto {
+  @ApiProperty({
+    description: 'Target website URL to open for user login',
+    example: 'http://localhost:3000/mock-hotel/vip',
+  })
+  url!: string;
+
+  @ApiPropertyOptional({
+    description: 'Timeout in milliseconds to wait for the user to authenticate',
+    example: 60000,
+    default: 60000,
+  })
+  timeoutMs?: number;
+}
+
 export class GenerateRequestDto {
   @ApiProperty({
     description:

@@ -19,6 +19,7 @@ import {
   ToolCallRequestDto,
   EnrichWordpressDto,
   EnrichGithubDto,
+  InteractiveLoginDto,
 } from './mcp-creator.dto.js';
 import type {
   ToolCallResponse,
@@ -135,6 +136,16 @@ export class McpCreatorController {
     `);
   }
 
+  @ApiOperation({ summary: 'Submit login on demo VIP hotel' })
+  @Post('mock-hotel/vip')
+  loginMockHotelVip(@Res() res: Response): void {
+    res.setHeader(
+      'Set-Cookie',
+      'session_id=vip_session_token_123; Path=/; HttpOnly',
+    );
+    res.redirect('/mock-hotel/vip');
+  }
+
   @ApiOperation({
     summary: 'Mock WordPress REST API index for local enrichment testing',
   })
@@ -232,6 +243,28 @@ export class McpCreatorController {
   @Post('api/v1/generate')
   async generate(@Body() dto: GenerateRequestDto): Promise<GenerateResponse> {
     return this.mcpCreatorService.generate(dto.url, dto.auth_session);
+  }
+
+  @ApiOperation({
+    summary:
+      'Open website in an interactive browser window for the user to log in directly, automatically capturing session cookies upon login',
+  })
+  @Post('api/v1/auth/interactive-login')
+  async interactiveLogin(
+    @Body() dto: InteractiveLoginDto,
+  ): Promise<{ auth_session: any; message: string }> {
+    return this.mcpCreatorService.interactiveLogin(dto.url, dto.timeoutMs);
+  }
+
+  @ApiOperation({
+    summary:
+      'Open interactive login window, automatically capture authentication upon user login, and generate the MCP server in one step',
+  })
+  @Post('api/v1/generate/interactive')
+  async generateInteractive(
+    @Body() dto: InteractiveLoginDto,
+  ): Promise<GenerateResponse> {
+    return this.mcpCreatorService.generateInteractive(dto.url, dto.timeoutMs);
   }
 
   @ApiOperation({ summary: 'List all registered MCP servers' })

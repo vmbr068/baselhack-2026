@@ -173,7 +173,7 @@ export class McpCreatorController {
 
   @ApiOperation({
     summary:
-      'Execute an MCP tool via direct API or Playwright on the live website',
+      'Execute an MCP tool via direct API or Playwright on the live website (with human confirmation guardrail)',
   })
   @ApiParam({
     name: 'id',
@@ -189,6 +189,8 @@ export class McpCreatorController {
       id,
       req.tool_name,
       req.arguments || {},
+      req.confirmed_by_human,
+      req.confirmation_token,
     );
   }
 

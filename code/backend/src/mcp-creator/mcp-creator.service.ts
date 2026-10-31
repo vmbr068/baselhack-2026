@@ -121,9 +121,17 @@ export class McpCreatorService implements OnModuleInit {
     serverId: string,
     toolName: string,
     args: Record<string, any> = {},
+    confirmedByHuman?: boolean,
+    confirmationToken?: string,
   ): Promise<ToolCallResponse> {
     const config = this.getServer(serverId);
-    return this.executor.executeTool(config, toolName, args);
+    return this.executor.executeTool(
+      config,
+      toolName,
+      args,
+      confirmedByHuman,
+      confirmationToken,
+    );
   }
 
   async enrichWithWordpress(

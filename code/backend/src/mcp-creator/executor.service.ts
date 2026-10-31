@@ -31,6 +31,14 @@ export class ExecutorService {
         error: `Tool '${toolName}' not found in configuration for ${config.hotelName}`,
       };
     }
+    if (toolDef.enabled === false) {
+      return {
+        tool_name: toolName,
+        success: false,
+        data: {},
+        error: `Tool '${toolName}' is disabled for ${config.hotelName}`,
+      };
+    }
 
     // Direct API Execution (if tool was enriched with a direct backend API endpoint)
     if (toolDef.apiEndpoint) {

@@ -6,6 +6,7 @@ import { SynthesizerService } from './synthesizer.service.js';
 import { ExecutorService } from './executor.service.js';
 import { WordpressEnricherService } from './enrichers/wordpress-enricher.service.js';
 import { GithubEnricherService } from './enrichers/github-enricher.service.js';
+import { ProviderConnectionsService } from './provider-connections.service.js';
 
 @Module({
   controllers: [McpCreatorController],
@@ -16,6 +17,7 @@ import { GithubEnricherService } from './enrichers/github-enricher.service.js';
     ExecutorService,
     WordpressEnricherService,
     GithubEnricherService,
+    ProviderConnectionsService,
   ],
   exports: [McpCreatorService],
 })

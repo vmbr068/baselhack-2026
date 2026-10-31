@@ -4,6 +4,8 @@ import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const frontendOrigin = process.env.MCPEX_FRONTEND_URL || 'http://127.0.0.1:5173';
+  app.enableCors({ origin: new URL(frontendOrigin).origin });
 
   const config = new DocumentBuilder()
     .setTitle('MCP Exchange Backend & Dynamic MCP Factory')

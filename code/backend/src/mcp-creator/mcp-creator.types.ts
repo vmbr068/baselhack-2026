@@ -34,6 +34,7 @@ export interface WebScanResult {
 export interface MCPToolDefinition {
   name: string;
   description: string;
+  enabled?: boolean;
   parameters: Record<string, any>;
   executionStep: 'check_availability' | 'reserve_room' | 'get_screenshot';
   selectorsMapping: Record<string, string>;
@@ -45,6 +46,7 @@ export interface MCPToolDefinition {
 
 export interface MCPServerConfig {
   serverId: string;
+  enabled?: boolean;
   hotelName: string;
   targetUrl: string;
   createdAt: string;

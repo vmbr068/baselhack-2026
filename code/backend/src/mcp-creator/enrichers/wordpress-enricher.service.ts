@@ -25,18 +25,21 @@ export class WordpressEnricherService {
   async enrichWithWordpress(
     config: MCPServerConfig,
     customWpUrl?: string,
+    accessToken?: string,
+    wpSiteId?: string,
   ): Promise<{ enrichedConfig: MCPServerConfig; summary: Record<string, any> }> {
-    let baseUrl = customWpUrl || config.targetUrl;
-    baseUrl = baseUrl.replace(/\/+$/, '');
-
-    const wpJsonUrl = baseUrl.endsWith('/wp-json') ? baseUrl : `${baseUrl}/wp-json`;
+    let baseUrl = (customWpUrl || config.targetUrl).replace(/\/+$/, '');
+    const wpJsonUrl = wpSiteId
+      ? `https://public-api.wordpress.com/wp/v2/sites/${encodeURIComponent(wpSiteId)}`
+      : (baseUrl.endsWith('/wp-json') ? baseUrl : `${baseUrl}/wp-json`);
+    if (wpSiteId) baseUrl = 'https://public-api.wordpress.com';
 
     this.logger.log(`Enriching MCP server '${config.serverId}' using WordPress API: ${wpJsonUrl}`);
 
     let indexData: any;
     try {
       const res = await fetch(wpJsonUrl, {
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
         signal: AbortSignal.timeout(10000),
       });
 

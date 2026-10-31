@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { chromium, Browser, Page } from 'playwright';
+import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import type { ApprovalRequest } from './approval-page.js';
 import {
   MCPServerConfig,
   ToolCallResponse,
@@ -13,6 +15,13 @@ import {
   blockDisallowedNavigation,
 } from './site-allowlist.js';
 import { appendAuditEntry } from './audit-log.js';
+
+const CONFIRMATION_TTL_MS = 15 * 60 * 1000;
+const publicBaseUrl = () =>
+  (
+    process.env.PUBLIC_BASE_URL ??
+    `http://localhost:${process.env.PORT ?? 3000}`
+  ).replace(/\/$/, '');
 
 const ROOM_CARD_SELECTOR = '.room-card, .room-item, [data-room-id], article';
 const MAX_BOOKING_STEPS = 6;
@@ -29,8 +38,11 @@ export class ExecutorService {
     {
       serverId: string;
       toolName: string;
+      hotel: string;
+      targetUrl: string;
       args: Record<string, any>;
       expiresAt: number;
+      approved: boolean;
     }
   >();
 
@@ -42,7 +54,6 @@ export class ExecutorService {
     config: MCPServerConfig,
     toolName: string,
     args: Record<string, any> = {},
-    confirmedByHuman?: boolean,
     confirmationToken?: string,
     authSessionOverride?: AuthSessionData | string,
     headless = true,
@@ -52,11 +63,6 @@ export class ExecutorService {
       hotel: config.hotelName,
       tool: toolName,
       arguments: args,
-      confirmed_by_human: Boolean(
-        confirmedByHuman === true ||
-        args.confirmed_by_human === true ||
-        args.confirmed_by_human === 'true',
-      ),
     };
     let res: ToolCallResponse;
     try {
@@ -64,7 +70,6 @@ export class ExecutorService {
         config,
         toolName,
         args,
-        confirmedByHuman,
         confirmationToken,
         authSessionOverride,
         headless,
@@ -75,6 +80,9 @@ export class ExecutorService {
     }
     await this.audit({
       ...entry,
+      confirmed_by_human: Boolean(
+        (confirmationToken || args.confirmation_token) && res.success,
+      ),
       status: res.status,
       success: res.success,
       error: res.error,
@@ -95,7 +103,6 @@ export class ExecutorService {
     config: MCPServerConfig,
     toolName: string,
     args: Record<string, any>,
-    confirmedByHuman?: boolean,
     confirmationToken?: string,
     authSessionOverride?: AuthSessionData | string,
     headless = true,
@@ -131,83 +138,64 @@ export class ExecutorService {
       toolName.toLowerCase().includes('pay'),
     );
 
-    const isExplicitlyConfirmed = Boolean(
-      confirmedByHuman === true ||
-      args.confirmed_by_human === true ||
-      args.confirmed_by_human === 'true',
-    );
-
-    const token = confirmationToken || args.confirmation_token;
-
-    // Safety Guardrail: Block execution without explicit human approval
-    if (isIrreversible && !isExplicitlyConfirmed) {
-      const generatedToken = `conf_tok_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-      this.pendingConfirmations.set(generatedToken, {
-        serverId: config.serverId,
-        toolName,
-        args,
-        expiresAt: Date.now() + 15 * 60 * 1000,
-      });
-
-      const summary = `Human approval required: Book '${args.room_title || 'Selected Room'}' at '${config.hotelName}' for ${args.guest_name || 'Guest'} (${args.guest_email || 'No email specified'}).`;
-
-      this.logger.warn(
-        `[GUARDRAIL] Execution blocked for irreversible action '${toolName}' on '${config.hotelName}'. Awaiting human confirmation.`,
-      );
-
-      return {
-        tool_name: toolName,
-        success: false,
-        status: 'pending_confirmation',
-        confirmation_required: true,
-        confirmation_details: {
-          token: generatedToken,
-          summary,
-          hotel: config.hotelName,
-          action: toolName,
-          details: {
-            room_title: args.room_title,
-            guest_name: args.guest_name,
-            guest_email: args.guest_email,
-            guest_phone: args.guest_phone,
-            special_requests: args.special_requests,
-            target_url: config.targetUrl,
-          },
-          expires_at: expiresAt,
-        },
-        data: {
-          blocked: true,
-          message: `ACTION BLOCKED: Irreversible action '${toolName}' on '${config.hotelName}' requires explicit human confirmation.`,
-          required_action: {
-            summary,
-            token: generatedToken,
-            instructions: `To proceed, ask the human user to confirm. Once confirmed, call this tool again with confirmed_by_human=true and confirmation_token='${generatedToken}'.`,
-          },
-        },
-      };
-    }
-
-    if (isIrreversible && isExplicitlyConfirmed) {
-      if (token) {
-        const pending = this.pendingConfirmations.get(token);
-        if (pending && pending.expiresAt < Date.now()) {
-          this.pendingConfirmations.delete(token);
+    // Safety Guardrail: only a human, on the approval page, can unlock this.
+    if (isIrreversible) {
+      const token = confirmationToken || args.confirmation_token;
+      if (!token) {
+        if (
+          toolDef.executionStep === 'reserve_room' &&
+          (!args.check_in || !args.check_out)
+        ) {
           return {
             tool_name: toolName,
             success: false,
             status: 'rejected',
-            data: {},
-            error: `Confirmation token '${token}' has expired. Please request human approval again.`,
+            data: { hotel: config.hotelName, room_title: args.room_title },
+            error: 'check_in and check_out are required. Nothing was booked.',
           };
         }
-        if (pending) {
-          this.pendingConfirmations.delete(token);
-        }
+        const generatedToken = `conf_tok_${randomBytes(24).toString('base64url').replace(/-/g, '_')}`;
+        const { confirmed_by_human: _ignored, ...requestedArgs } = args;
+        this.pendingConfirmations.set(generatedToken, {
+          serverId: config.serverId,
+          toolName,
+          hotel: config.hotelName,
+          targetUrl: config.targetUrl,
+          args: requestedArgs,
+          expiresAt: Date.now() + CONFIRMATION_TTL_MS,
+          approved: false,
+        });
+        this.logger.warn(
+          `[GUARDRAIL] Execution blocked for irreversible action '${toolName}' on '${config.hotelName}'.`,
+        );
+        return this.pendingResponse(generatedToken);
       }
+
+      const pending = this.pendingConfirmations.get(token);
+      if (
+        !pending ||
+        pending.expiresAt < Date.now() ||
+        pending.serverId !== config.serverId ||
+        pending.toolName !== toolName
+      ) {
+        return {
+          tool_name: toolName,
+          success: false,
+          status: 'rejected',
+          data: {},
+          error:
+            'This confirmation token is invalid, expired or already used. Call the tool again without a token to request a new approval.',
+        };
+      }
+      if (!pending.approved) {
+        return this.pendingResponse(token);
+      }
+
+      // Single use, and it runs exactly what the human approved.
+      this.pendingConfirmations.delete(token);
+      args = pending.args;
       this.logger.log(
-        `[GUARDRAIL AUDIT] Human confirmation verified for irreversible tool '${toolName}' on '${config.hotelName}'. Proceeding with execution.`,
+        `[GUARDRAIL AUDIT] Human approval verified for irreversible tool '${toolName}' on '${config.hotelName}'.`,
       );
     }
 
@@ -321,15 +309,6 @@ export class ExecutorService {
       // 2. reserve_room
       if (toolDef.executionStep === 'reserve_room') {
         const roomTitle: string = args.room_title || '';
-        if (!args.check_in || !args.check_out) {
-          return {
-            tool_name: toolName,
-            success: false,
-            status: 'rejected',
-            data: { hotel: config.hotelName, room_title: roomTitle },
-            error: 'check_in and check_out are required. Nothing was booked.',
-          };
-        }
         const searchTool = config.tools.find(
           (t) => t.executionStep === 'check_availability',
         );
@@ -417,6 +396,55 @@ export class ExecutorService {
     } finally {
       await browser.close();
     }
+  }
+
+  private pendingResponse(token: string): ToolCallResponse {
+    const pending = this.pendingConfirmations.get(token)!;
+    const approvalUrl = `${publicBaseUrl()}/confirm/${token}`;
+    const summary = `Human approval required: ${pending.toolName} on '${pending.hotel}'. Ask the user to open ${approvalUrl}`;
+    const instructions = `Show the user this link and ask them to approve there: ${approvalUrl}. Never open or submit it yourself. Once they say they approved, call this tool again with confirmation_token='${token}'. It runs exactly what they approved.`;
+    return {
+      tool_name: pending.toolName,
+      success: false,
+      status: 'pending_confirmation',
+      confirmation_required: true,
+      confirmation_details: {
+        token,
+        approval_url: approvalUrl,
+        summary,
+        hotel: pending.hotel,
+        action: pending.toolName,
+        details: { ...pending.args, target_url: pending.targetUrl },
+        expires_at: new Date(pending.expiresAt).toISOString(),
+      },
+      data: {
+        blocked: true,
+        message: `ACTION BLOCKED: '${pending.toolName}' needs approval from the human user.`,
+        required_action: { summary, token, instructions },
+      },
+    };
+  }
+
+  /** Returns what the approval page shows, or undefined if it cannot be approved. */
+  getApprovalRequest(token: string): ApprovalRequest | undefined {
+    const pending = this.pendingConfirmations.get(token);
+    if (!pending || pending.expiresAt < Date.now()) return undefined;
+    return {
+      hotel: pending.hotel,
+      action: pending.toolName,
+      details: pending.args,
+    };
+  }
+
+  approveConfirmation(token: string): boolean {
+    const pending = this.pendingConfirmations.get(token);
+    if (!pending || pending.expiresAt < Date.now()) return false;
+    pending.approved = true;
+    return true;
+  }
+
+  rejectConfirmation(token: string): boolean {
+    return this.pendingConfirmations.delete(token);
   }
 
   /** Waits for a navigation or API call triggered by the last action. */

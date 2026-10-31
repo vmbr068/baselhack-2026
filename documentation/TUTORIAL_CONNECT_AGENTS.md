@@ -216,21 +216,17 @@ In accordance with [AGENTS.md](../AGENTS.md), irreversible actions (such as book
      "status": "pending_confirmation",
      "confirmation_required": true,
      "confirmation_details": {
-       "token": "conf_tok_1730367800000_abc123",
+       "token": "conf_tok_...",
+       "approval_url": "https://api.bh2026.tekitup.net/confirm/conf_tok_...",
        "summary": "Human approval required: Book Deluxe Rhine View Suite for Sacha Ramstein"
      }
    }
    ```
-3. **Agent asks the human user**:
-   > *"Do you confirm the reservation of the Deluxe Rhine View Suite for Sacha Ramstein?"*
-4. **User approves**, and the agent re-submits with the confirmation token:
+3. **Agent shows the user the `approval_url` from `confirmation_details`**. The page lists the request, and only a click on **Approve** there unlocks it. A `confirmed_by_human` flag sent by the agent is ignored.
+4. **User approves**, and the agent calls the tool again with only the token. It runs exactly what was approved, once:
    ```json
    {
-     "room_title": "Deluxe Rhine View Suite",
-     "guest_name": "Sacha Ramstein",
-     "guest_email": "sacha@baselhack.ch",
-     "confirmed_by_human": true,
-     "confirmation_token": "conf_tok_1730367800000_abc123"
+     "confirmation_token": "conf_tok_..."
    }
    ```
 5. **Reservation confirmed** live on the website by Playwright!

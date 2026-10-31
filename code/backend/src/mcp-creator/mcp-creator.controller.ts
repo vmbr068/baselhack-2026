@@ -12,6 +12,7 @@ import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import { renderApprovalPage, renderApprovalResult } from './approval-page.js';
 import { McpCreatorService } from './mcp-creator.service.js';
 import { McpAgentTransportService } from './mcp-agent-transport.service.js';
 import {
@@ -29,6 +30,11 @@ import type {
   MCPServerConfig,
   EnrichResponse,
 } from './mcp-creator.types.js';
+
+const EXPIRED_APPROVAL_PAGE = renderApprovalResult(
+  'Link expired',
+  'This approval link is invalid, expired or already used. Nothing was done.',
+);
 
 @ApiTags('MCP Creator')
 @Controller()
@@ -308,10 +314,48 @@ export class McpCreatorController {
       id,
       req.tool_name,
       req.arguments || {},
-      req.confirmed_by_human,
       req.confirmation_token,
       req.auth_session,
     );
+  }
+
+  @ApiOperation({ summary: 'Show a human the action an agent asks to approve' })
+  @Get('confirm/:token')
+  showApproval(@Param('token') token: string, @Res() res: Response): void {
+    const request = this.mcpCreatorService.getApprovalRequest(token);
+    if (!request) {
+      res.status(404).type('html').send(EXPIRED_APPROVAL_PAGE);
+      return;
+    }
+    res.type('html').send(renderApprovalPage(token, request));
+  }
+
+  @ApiOperation({ summary: 'Approve an action requested by an agent' })
+  @Post('confirm/:token')
+  approve(@Param('token') token: string, @Res() res: Response): void {
+    if (!this.mcpCreatorService.approveConfirmation(token)) {
+      res.status(404).type('html').send(EXPIRED_APPROVAL_PAGE);
+      return;
+    }
+    res
+      .status(200)
+      .type('html')
+      .send(
+        renderApprovalResult(
+          'Approved',
+          'You can go back to your chat and tell the agent you approved.',
+        ),
+      );
+  }
+
+  @ApiOperation({ summary: 'Reject an action requested by an agent' })
+  @Post('confirm/:token/reject')
+  reject(@Param('token') token: string, @Res() res: Response): void {
+    this.mcpCreatorService.rejectConfirmation(token);
+    res
+      .status(200)
+      .type('html')
+      .send(renderApprovalResult('Rejected', 'Nothing will happen.'));
   }
 
   @ApiOperation({

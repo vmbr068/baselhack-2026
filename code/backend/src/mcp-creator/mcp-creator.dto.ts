@@ -2,7 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GenerateRequestDto {
   @ApiProperty({
-    description: 'Target hotel website URL to scan and create an MCP server for',
+    description:
+      'Target hotel website URL to scan and create an MCP server for',
     example: 'http://localhost:3000/mock-hotel',
   })
   url!: string;
@@ -37,7 +38,8 @@ export class ToolCallRequestDto {
 
 export class EnrichWordpressDto {
   @ApiPropertyOptional({
-    description: 'WordPress site URL or REST API root (defaults to the target URL of the MCP server)',
+    description:
+      'WordPress site URL or REST API root (defaults to the target URL of the MCP server)',
     example: 'https://hotel-basel-demo.ch/wp-json',
   })
   wpUrl?: string;
@@ -45,7 +47,8 @@ export class EnrichWordpressDto {
 
 export class EnrichGithubDto {
   @ApiProperty({
-    description: 'Public or private GitHub repository URL containing the website codebase',
+    description:
+      'Public or private GitHub repository URL containing the website codebase',
     example: 'https://github.com/basel-hackathon/hotel-booking-service',
   })
   repoUrl!: string;
@@ -58,7 +61,8 @@ export class EnrichGithubDto {
   branch?: string;
 
   @ApiPropertyOptional({
-    description: 'GitHub Personal Access Token for private repositories or higher rate limits',
+    description:
+      'GitHub Personal Access Token for private repositories or higher rate limits',
     example: 'ghp_xxxxxxxxxxxxxxxxxxxx',
   })
   githubToken?: string;

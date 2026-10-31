@@ -126,9 +126,13 @@ export class McpCreatorService implements OnModuleInit {
     return this.executor.executeTool(config, toolName, args);
   }
 
-  async enrichWithWordpress(serverId: string, customWpUrl?: string): Promise<EnrichResponse> {
+  async enrichWithWordpress(
+    serverId: string,
+    customWpUrl?: string,
+  ): Promise<EnrichResponse> {
     const config = this.getServer(serverId);
-    const { enrichedConfig, summary } = await this.wpEnricher.enrichWithWordpress(config, customWpUrl);
+    const { enrichedConfig, summary } =
+      await this.wpEnricher.enrichWithWordpress(config, customWpUrl);
     await this.persistServer(enrichedConfig);
 
     return {

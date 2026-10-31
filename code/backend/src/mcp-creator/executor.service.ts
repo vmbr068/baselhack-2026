@@ -60,7 +60,9 @@ export class ExecutorService {
         });
 
         if (apiRes.ok) {
-          const apiData = await apiRes.json().catch(() => ({ status: 'success' }));
+          const apiData = await apiRes
+            .json()
+            .catch(() => ({ status: 'success' }));
           return {
             tool_name: toolName,
             success: true,

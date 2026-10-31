@@ -86,6 +86,14 @@ describe('McpCreatorController (e2e)', () => {
     );
   }, 30000);
 
+  it('/mock-wp/wp-json (GET) should serve mock WordPress REST API schema', async () => {
+    const res = await request(app.getHttpServer()).get('/mock-wp/wp-json');
+    expect(res.status).toBe(200);
+    expect(res.body.namespaces).toContain('hotel/v1');
+    expect(res.body.routes['/hotel/v1/availability']).toBeDefined();
+    expect(res.body.routes['/hotel/v1/reserve']).toBeDefined();
+  });
+
   it('/api/v1/servers/:id/enrich/wordpress (POST) should handle invalid WP endpoint gracefully', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/servers/latest/enrich/wordpress')

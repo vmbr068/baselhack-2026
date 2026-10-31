@@ -81,7 +81,10 @@ export class ExecutorService {
     }
 
     const selectors = toolDef.selectorsMapping;
-    const browser: Browser = await chromium.launch({ headless });
+    const browser: Browser = await chromium.launch({
+      headless,
+      executablePath: process.env.CHROMIUM_PATH,
+    });
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       userAgent:

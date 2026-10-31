@@ -40,6 +40,8 @@
         ];
       };
 
+      packages.${system}.backend = pkgs.callPackage ./nixos/backend-package.nix { };
+
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           opentofu

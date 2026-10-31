@@ -7,6 +7,7 @@
   imports = [
     (modulesPath + "/profiles/qemu-guest.nix")
     ./disk.nix
+    ./backend.nix
   ];
 
   assertions = [

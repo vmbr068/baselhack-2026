@@ -7,9 +7,18 @@ import {
   Query,
   Req,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
+import { BusinessAuthGuard, CurrentUser } from '../auth/auth.guard.js';
+import type { BusinessUser } from '../auth/auth.types.js';
 import { McpExchangeService } from './mcp-exchange.service.js';
 import { PublishRequestDto } from './mcp-exchange.dto.js';
 import type {
@@ -26,11 +35,16 @@ export class McpExchangeController {
 
   @ApiOperation({
     summary:
-      'Publish a generated MCP server to the Exchange (append-only: republishing the same site adds a new version)',
+      'Publish a generated MCP server to the Exchange (append-only: republishing the same site adds a new version). Requires a business owner login.',
   })
+  @ApiBearerAuth()
+  @UseGuards(BusinessAuthGuard)
   @Post('mcps')
-  async publish(@Body() dto: PublishRequestDto): Promise<PublishResponse> {
-    return this.mcpExchangeService.publish(dto.server_id, dto.description);
+  async publish(
+    @Body() dto: PublishRequestDto,
+    @CurrentUser() user: BusinessUser,
+  ): Promise<PublishResponse> {
+    return this.mcpExchangeService.publish(dto.server_id, dto.description, user);
   }
 
   @ApiOperation({

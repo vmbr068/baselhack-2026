@@ -4,6 +4,8 @@ import request from 'supertest';
 import { App } from 'supertest/types.js';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { AppModule } from './../src/app.module.js';
 
 describe('McpCreatorController (e2e)', () => {
@@ -277,4 +279,141 @@ describe('McpCreatorController (e2e)', () => {
       'Reservation Confirmed',
     );
   }, 30000);
+
+  describe('MCP SSE Transport & Agent Connectivity (Issue #43)', () => {
+    let mcpClient: Client | null = null;
+    let sseTransport: SSEClientTransport | null = null;
+
+    afterEach(async () => {
+      if (mcpClient) {
+        try {
+          await mcpClient.close();
+        } catch {
+          // ignore
+        }
+        mcpClient = null;
+      }
+    });
+
+    it('should connect an official MCP Client via SSE and list generated tools', async () => {
+      mcpClient = new Client(
+        {
+          name: 'agent-test-client',
+          version: '1.0.0',
+        },
+        {
+          capabilities: {},
+        },
+      );
+
+      const sseUrl = new URL(`${baseUrl}/api/v1/servers/latest/mcp/sse`);
+      sseTransport = new SSEClientTransport(sseUrl);
+
+      await mcpClient.connect(sseTransport);
+
+      const toolsResult = await mcpClient.listTools();
+      expect(toolsResult.tools).toBeDefined();
+      expect(toolsResult.tools.length).toBeGreaterThanOrEqual(3);
+
+      const names = toolsResult.tools.map((t) => t.name);
+      expect(names).toContain('check_availability');
+      expect(names).toContain('reserve_room');
+      expect(names).toContain('get_current_status');
+    });
+
+    it('should execute check_availability via MCP Client callTool', async () => {
+      mcpClient = new Client(
+        {
+          name: 'agent-test-client',
+          version: '1.0.0',
+        },
+        {
+          capabilities: {},
+        },
+      );
+
+      sseTransport = new SSEClientTransport(
+        new URL(`${baseUrl}/api/v1/servers/latest/mcp/sse`),
+      );
+      await mcpClient.connect(sseTransport);
+
+      const result = await mcpClient.callTool({
+        name: 'check_availability',
+        arguments: {
+          check_in: '2026-11-05',
+          check_out: '2026-11-08',
+          guests: 2,
+        },
+      });
+
+      expect(result.content).toBeDefined();
+      const textContent = (
+        result.content as Array<{ type: string; text?: string }>
+      )[0]?.text;
+      expect(textContent).toBeDefined();
+      const parsed = JSON.parse(textContent as string);
+      expect(parsed.success).toBe(true);
+      expect(parsed.data.rooms_count).toBeGreaterThanOrEqual(1);
+    }, 30000);
+
+    it('should enforce human confirmation via MCP Client callTool when booking', async () => {
+      mcpClient = new Client(
+        {
+          name: 'agent-test-client',
+          version: '1.0.0',
+        },
+        {
+          capabilities: {},
+        },
+      );
+
+      sseTransport = new SSEClientTransport(
+        new URL(`${baseUrl}/api/v1/servers/latest/mcp/sse`),
+      );
+      await mcpClient.connect(sseTransport);
+
+      // Attempt without human confirmation
+      const blockedResult = await mcpClient.callTool({
+        name: 'reserve_room',
+        arguments: {
+          room_title: 'Deluxe Rhine View Suite',
+          guest_name: 'Agent User',
+          guest_email: 'agent@baselhack.ch',
+          confirmed_by_human: false,
+        },
+      });
+
+      const blockedText = (
+        blockedResult.content as Array<{ type: string; text?: string }>
+      )[0]?.text;
+      expect(blockedText).toBeDefined();
+      const blockedParsed = JSON.parse(blockedText as string);
+      expect(blockedParsed.status).toBe('pending_confirmation');
+      expect(blockedParsed.confirmation_required).toBe(true);
+      expect(blockedParsed.confirmation_details.token).toBeDefined();
+
+      const token = blockedParsed.confirmation_details.token;
+
+      // Now call with human confirmation and token
+      const confirmedResult = await mcpClient.callTool({
+        name: 'reserve_room',
+        arguments: {
+          room_title: 'Deluxe Rhine View Suite',
+          guest_name: 'Agent User',
+          guest_email: 'agent@baselhack.ch',
+          confirmed_by_human: true,
+          confirmation_token: token,
+        },
+      });
+
+      const confirmedText = (
+        confirmedResult.content as Array<{ type: string; text?: string }>
+      )[0]?.text;
+      expect(confirmedText).toBeDefined();
+      const confirmedParsed = JSON.parse(confirmedText as string);
+      expect(confirmedParsed.success).toBe(true);
+      expect(confirmedParsed.status).toBe('executed');
+      expect(confirmedParsed.data.status).toBe('confirmed');
+    }, 30000);
+  });
 });

@@ -13,6 +13,7 @@ import type { Request, Response } from 'express';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { McpCreatorService } from './mcp-creator.service.js';
+import { McpAgentTransportService } from './mcp-agent-transport.service.js';
 import {
   GenerateRequestDto,
   ScanRequestDto,
@@ -41,7 +42,10 @@ export class McpCreatorController {
     'static/screenshots',
   );
 
-  constructor(private readonly mcpCreatorService: McpCreatorService) {}
+  constructor(
+    private readonly mcpCreatorService: McpCreatorService,
+    private readonly mcpAgentTransport: McpAgentTransportService,
+  ) {}
 
   @ApiOperation({ summary: 'Serve the local demo hotel website' })
   @Get('mock-hotel')
@@ -346,5 +350,41 @@ export class McpCreatorController {
       dto.branch || 'main',
       dto.githubToken,
     );
+  }
+
+  @ApiOperation({
+    summary:
+      'Connect an AI agent (Claude, Cursor, Codex, Luna) via standard MCP Server-Sent Events (SSE)',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 'latest',
+    description: 'Server ID or "latest"',
+  })
+  @Get('api/v1/servers/:id/mcp/sse')
+  async handleMcpSse(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.mcpAgentTransport.handleSseConnection(id, req, res);
+  }
+
+  @ApiOperation({
+    summary:
+      'MCP message endpoint for client-to-server JSON-RPC requests (SSE transport)',
+  })
+  @ApiParam({
+    name: 'id',
+    example: 'latest',
+    description: 'Server ID or "latest"',
+  })
+  @Post('api/v1/servers/:id/mcp/messages')
+  async handleMcpMessages(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.mcpAgentTransport.handlePostMessage(id, req, res);
   }
 }

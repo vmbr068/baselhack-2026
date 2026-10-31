@@ -43,6 +43,6 @@ The Vite development server proxies `/api`, `/mock-hotel`, and `/static` to `htt
 MCPEX_BACKEND_URL=http://localhost:3001 npm run dev
 ```
 
-The frontend calls `POST /api/v1/generate`, `GET /api/v1/servers`, `GET /api/v1/servers/:id`, and the GitHub/WordPress enrichment endpoints. For a deployed frontend, set `VITE_API_BASE_URL` to the full API base URL (for example `https://api.example.com/api/v1`).
+The frontend calls the generation, server, OAuth connection, enrichment, and enable/disable endpoints. Register the GitHub and WordPress.com OAuth applications with the callback URLs listed in the backend README. Configure their client credentials and `MCPEX_FRONTEND_URL` in the backend environment. For a deployed frontend, set `VITE_API_BASE_URL` to the full API base URL.
 
-The backend currently has no authentication, MCP route update, or activity log endpoints. Sign-in/sign-up remain interface screens; the activity page can only show events inferred from the server creation and enrichment timestamps available in the API.
+Provider access tokens stay in frontend memory and must be reconnected after a page reload. Sign-in/sign-up for MCPEX and the activity log are not backed by account endpoints; the activity view derives entries from server creation and enrichment timestamps.

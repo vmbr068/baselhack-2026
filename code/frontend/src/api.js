@@ -49,6 +49,10 @@ function jsonBody(value) {
   return { method: 'POST', body: JSON.stringify(value) }
 }
 
+function patchBody(value) {
+  return { method: 'PATCH', body: JSON.stringify(value) }
+}
+
 // Business Owner Authentication
 export const loginBusinessOwner = (email, password) =>
   request('/auth/login', jsonBody({ email, password }))
@@ -71,6 +75,20 @@ export const listMcpServers = () => request('/servers')
 export const getMcpServer = serverId =>
   request(`/servers/${encodeURIComponent(serverId)}`)
 
+export const setMcpServerEnabled = (serverId, enabled) =>
+  request(`/servers/${encodeURIComponent(serverId)}`, patchBody({ enabled }))
+
+export const setMcpToolEnabled = (serverId, toolName, enabled) =>
+  request(`/servers/${encodeURIComponent(serverId)}/tools/${encodeURIComponent(toolName)}`, patchBody({ enabled }))
+
+export const consumeOAuthTicket = (provider, ticket, serverId) =>
+  request(`/oauth/${provider}/consume`, jsonBody({ ticket, serverId }))
+
+export const getProviderConnectUrl = (serverId, provider, siteUrl) => {
+  const path = `/servers/${encodeURIComponent(serverId)}/connect/${provider}`
+  return `${API_BASE_URL}${path}${provider === 'wordpress' ? `?site_url=${encodeURIComponent(siteUrl)}` : ''}`
+}
+
 export const generateMcp = (url, authSession) =>
   request('/generate', jsonBody({ url, ...(authSession ? { auth_session: authSession } : {}) }))
 
@@ -84,7 +102,7 @@ export const enrichMcpWithGithub = (serverId, { repoUrl, branch, githubToken }) 
     ...(githubToken ? { githubToken } : {}),
   }))
 
-export const enrichMcpWithWordpress = (serverId, wpUrl) =>
+export const enrichMcpWithWordpress = (serverId, wpUrl, accessToken, wpSiteId) =>
   request(`/servers/${encodeURIComponent(serverId)}/enrich/wordpress`, jsonBody(
-    wpUrl ? { wpUrl } : {},
+    { ...(wpUrl ? { wpUrl } : {}), ...(accessToken ? { accessToken } : {}), ...(wpSiteId ? { wpSiteId } : {}) },
   ))

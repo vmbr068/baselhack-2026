@@ -110,6 +110,14 @@ export class ExecutorService {
         error: `Tool '${toolName}' not found in configuration for ${config.hotelName}`,
       };
     }
+    if (toolDef.enabled === false) {
+      return {
+        tool_name: toolName,
+        success: false,
+        data: {},
+        error: `Tool '${toolName}' is disabled for ${config.hotelName}`,
+      };
+    }
 
     // Servers persisted on disk may predate the allowlist, so check on every call.
     assertAllowedSite(config.targetUrl);

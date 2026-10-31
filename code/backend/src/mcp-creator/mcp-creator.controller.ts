@@ -2,17 +2,21 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
+  Query,
   Res,
   Req,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { McpCreatorService } from './mcp-creator.service.js';
+import { ProviderConnectionsService } from './provider-connections.service.js';
 import { McpAgentTransportService } from './mcp-agent-transport.service.js';
 import {
   GenerateRequestDto,
@@ -20,6 +24,8 @@ import {
   ToolCallRequestDto,
   EnrichWordpressDto,
   EnrichGithubDto,
+  SetEnabledDto,
+  OAuthTicketDto,
   InteractiveLoginDto,
 } from './mcp-creator.dto.js';
 import type {
@@ -44,6 +50,7 @@ export class McpCreatorController {
 
   constructor(
     private readonly mcpCreatorService: McpCreatorService,
+    private readonly providerConnections: ProviderConnectionsService,
     private readonly mcpAgentTransport: McpAgentTransportService,
   ) {}
 
@@ -290,6 +297,92 @@ export class McpCreatorController {
     return this.mcpCreatorService.getServer(id);
   }
 
+  @ApiOperation({ summary: 'Enable or disable an MCP server' })
+  @Patch('api/v1/servers/:id')
+  setServerEnabled(
+    @Param('id') id: string,
+    @Body() dto: SetEnabledDto,
+  ): Promise<MCPServerConfig> {
+    if (typeof dto.enabled !== 'boolean') throw new BadRequestException('enabled must be a boolean');
+    return this.mcpCreatorService.setServerEnabled(id, dto.enabled);
+  }
+
+  @ApiOperation({ summary: 'Enable or disable one MCP tool' })
+  @Patch('api/v1/servers/:id/tools/:toolName')
+  setToolEnabled(
+    @Param('id') id: string,
+    @Param('toolName') toolName: string,
+    @Body() dto: SetEnabledDto,
+  ): Promise<MCPServerConfig> {
+    if (typeof dto.enabled !== 'boolean') throw new BadRequestException('enabled must be a boolean');
+    return this.mcpCreatorService.setToolEnabled(id, toolName, dto.enabled);
+  }
+
+  @ApiOperation({ summary: 'Start GitHub OAuth for an MCP server' })
+  @Get('api/v1/servers/:id/connect/github')
+  async connectGithub(@Param('id') id: string, @Res() res: Response): Promise<void> {
+    this.mcpCreatorService.getServer(id);
+    res.redirect(this.providerConnections.beginGithub(id));
+  }
+
+  @ApiOperation({ summary: 'Start WordPress.com OAuth for an MCP server' })
+  @Get('api/v1/servers/:id/connect/wordpress')
+  async connectWordPress(
+    @Param('id') id: string,
+    @Query('site_url') siteUrl: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    this.mcpCreatorService.getServer(id);
+    res.redirect(this.providerConnections.beginWordPress(id, siteUrl));
+  }
+
+  @ApiOperation({ summary: 'Complete GitHub OAuth connection' })
+  @Get('api/v1/oauth/github/callback')
+  async githubCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') oauthError: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (oauthError) {
+      const result = this.providerConnections.cancel('github', state);
+      res.redirect(this.providerConnections.frontendResult(result.serverId, 'github', false));
+      return;
+    }
+    const result = await this.providerConnections.complete('github', code, state);
+    res.redirect(this.providerConnections.frontendResult(result.serverId, 'github', true, result.ticket));
+  }
+
+  @ApiOperation({ summary: 'Complete WordPress.com OAuth connection' })
+  @Get('api/v1/oauth/wordpress/callback')
+  async wordpressCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Query('error') oauthError: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (oauthError) {
+      const result = this.providerConnections.cancel('wordpress', state);
+      res.redirect(this.providerConnections.frontendResult(result.serverId, 'wordpress', false));
+      return;
+    }
+    const result = await this.providerConnections.complete('wordpress', code, state);
+    res.redirect(this.providerConnections.frontendResult(result.serverId, 'wordpress', true, result.ticket));
+  }
+
+  @ApiOperation({ summary: 'Consume a short-lived OAuth ticket once' })
+  @Post('api/v1/oauth/:provider/consume')
+  consumeOAuthTicket(
+    @Param('provider') provider: string,
+    @Body() dto: OAuthTicketDto,
+  ) {
+    this.mcpCreatorService.getServer(dto.serverId);
+    if (provider !== 'github' && provider !== 'wordpress') {
+      throw new NotFoundException(`Provider '${provider}' is not supported`);
+    }
+    return this.providerConnections.consumeTicket(dto.ticket, dto.serverId, provider);
+  }
+
   @ApiOperation({
     summary:
       'Execute an MCP tool via direct API or Playwright on the live website (with human confirmation guardrail and session auth support)',
@@ -327,7 +420,7 @@ export class McpCreatorController {
     @Param('id') id: string,
     @Body() dto: EnrichWordpressDto,
   ): Promise<EnrichResponse> {
-    return this.mcpCreatorService.enrichWithWordpress(id, dto.wpUrl);
+    return this.mcpCreatorService.enrichWithWordpress(id, dto.wpUrl, dto.accessToken, dto.wpSiteId);
   }
 
   @ApiOperation({

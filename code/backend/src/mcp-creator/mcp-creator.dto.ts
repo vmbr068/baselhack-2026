@@ -109,6 +109,12 @@ export class EnrichWordpressDto {
     example: 'https://hotel-basel-demo.ch/wp-json',
   })
   wpUrl?: string;
+
+  @ApiPropertyOptional({ description: 'WordPress.com OAuth access token; keep this in memory and send only for the enrichment request' })
+  accessToken?: string;
+
+  @ApiPropertyOptional({ description: 'WordPress.com blog ID returned by the OAuth exchange' })
+  wpSiteId?: string;
 }
 
 export class EnrichGithubDto {
@@ -132,4 +138,17 @@ export class EnrichGithubDto {
     example: 'ghp_xxxxxxxxxxxxxxxxxxxx',
   })
   githubToken?: string;
+}
+
+export class SetEnabledDto {
+  @ApiProperty({ description: 'Whether the MCP server or tool is enabled', example: false })
+  enabled!: boolean;
+}
+
+export class OAuthTicketDto {
+  @ApiProperty({ description: 'One-time OAuth ticket returned to the frontend' })
+  ticket!: string;
+
+  @ApiProperty({ description: 'MCP server ID associated with the authorization' })
+  serverId!: string;
 }

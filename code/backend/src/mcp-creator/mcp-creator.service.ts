@@ -51,6 +51,8 @@ export class McpCreatorService implements OnModuleInit {
           const filePath = path.join(this.serversDir, file);
           const raw = await fs.readFile(filePath, 'utf-8');
           const config: MCPServerConfig = JSON.parse(raw);
+          config.enabled ??= true;
+          config.tools = config.tools.map((tool) => ({ ...tool, enabled: tool.enabled ?? true }));
           this.serversStore.set(config.serverId, config);
         }
       }
@@ -63,6 +65,8 @@ export class McpCreatorService implements OnModuleInit {
   }
 
   private async persistServer(config: MCPServerConfig) {
+    config.enabled ??= true;
+    config.tools = config.tools.map((tool) => ({ ...tool, enabled: tool.enabled ?? true }));
     this.serversStore.set(config.serverId, config);
     const filePath = path.join(this.serversDir, `${config.serverId}.json`);
     await fs.writeFile(filePath, JSON.stringify(config, null, 2), 'utf-8');
@@ -226,6 +230,9 @@ export class McpCreatorService implements OnModuleInit {
     authSession?: AuthSessionData | string,
   ): Promise<ToolCallResponse> {
     const config = this.getServer(serverId);
+    if (config.enabled === false) {
+      return { tool_name: toolName, success: false, data: {}, error: `MCP server '${config.hotelName}' is disabled` };
+    }
     return this.executor.executeTool(
       config,
       toolName,
@@ -236,13 +243,33 @@ export class McpCreatorService implements OnModuleInit {
     );
   }
 
+  async setServerEnabled(serverId: string, enabled: boolean): Promise<MCPServerConfig> {
+    const config = this.getServer(serverId);
+    config.enabled = enabled;
+    await this.persistServer(config);
+    return config;
+  }
+
+  async setToolEnabled(serverId: string, toolName: string, enabled: boolean): Promise<MCPServerConfig> {
+    const config = this.getServer(serverId);
+    const tool = config.tools.find((item) => item.name === toolName);
+    if (!tool) {
+      throw new NotFoundException(`Tool '${toolName}' not found in MCP server '${config.hotelName}'`);
+    }
+    tool.enabled = enabled;
+    await this.persistServer(config);
+    return config;
+  }
+
   async enrichWithWordpress(
     serverId: string,
     customWpUrl?: string,
+    accessToken?: string,
+    wpSiteId?: string,
   ): Promise<EnrichResponse> {
     const config = this.getServer(serverId);
     const { enrichedConfig, summary } =
-      await this.wpEnricher.enrichWithWordpress(config, customWpUrl);
+      await this.wpEnricher.enrichWithWordpress(config, customWpUrl, accessToken, wpSiteId);
     await this.persistServer(enrichedConfig);
 
     return {

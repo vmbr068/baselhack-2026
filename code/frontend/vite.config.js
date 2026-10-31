@@ -12,4 +12,13 @@ export default defineConfig({
       '/static': backendUrl,
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/@react-spectrum/s2/')) return 'spectrum2'
+        },
+      },
+    },
+  },
 })

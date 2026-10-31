@@ -6,6 +6,7 @@ import { SynthesizerService } from './synthesizer.service.js';
 import { ExecutorService } from './executor.service.js';
 import { WordpressEnricherService } from './enrichers/wordpress-enricher.service.js';
 import { GithubEnricherService } from './enrichers/github-enricher.service.js';
+import { ProviderConnectionsService } from './provider-connections.service.js';
 import { McpAgentTransportService } from './mcp-agent-transport.service.js';
 
 @Module({
@@ -18,6 +19,7 @@ import { McpAgentTransportService } from './mcp-agent-transport.service.js';
     ExecutorService,
     WordpressEnricherService,
     GithubEnricherService,
+    ProviderConnectionsService,
   ],
   exports: [McpCreatorService, McpAgentTransportService],
 })

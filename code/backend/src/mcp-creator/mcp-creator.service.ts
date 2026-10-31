@@ -171,6 +171,27 @@ export class McpCreatorService implements OnModuleInit {
     const scanResult = await this.scanner.scanWebsite(url, authSession);
     const config = this.synthesizer.synthesizeMCPServer(scanResult);
 
+    // If a server already exists for this exact target URL, replace it inplace
+    const normalizedTargetUrl = url.replace(/\/+$/, '').toLowerCase();
+    const existingEntry = Array.from(this.serversStore.entries()).find(
+      ([, server]) =>
+        server.targetUrl?.replace(/\/+$/, '').toLowerCase() ===
+        normalizedTargetUrl,
+    );
+
+    if (existingEntry) {
+      const [existingServerId, existingServer] = existingEntry;
+      // Retain the existing serverId so existing connections & bookmarks remain valid
+      config.serverId = existingServerId;
+      config.enabled = existingServer.enabled ?? true;
+      if (existingServer.codebaseEnrichment) {
+        config.codebaseEnrichment = existingServer.codebaseEnrichment;
+      }
+      this.logger.log(
+        `Replacing existing MCP server '${existingServerId}' for target URL '${url}'`,
+      );
+    }
+
     if (authSession) {
       config.authSession =
         typeof authSession === 'string' ? JSON.parse(authSession) : authSession;

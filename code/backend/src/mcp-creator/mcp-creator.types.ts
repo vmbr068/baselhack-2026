@@ -84,6 +84,7 @@ export interface MCPServerConfig {
 }
 
 export interface ConfirmationDetails {
+  approval_url: string;
   token: string;
   summary: string;
   hotel: string;
@@ -95,7 +96,6 @@ export interface ConfirmationDetails {
 export interface ToolCallRequest {
   tool_name: string;
   arguments?: Record<string, any>;
-  confirmed_by_human?: boolean;
   confirmation_token?: string;
   auth_session?: AuthSessionData | string;
 }

@@ -221,7 +221,6 @@ export class McpCreatorService implements OnModuleInit {
     serverId: string,
     toolName: string,
     args: Record<string, any> = {},
-    confirmedByHuman?: boolean,
     confirmationToken?: string,
     authSession?: AuthSessionData | string,
   ): Promise<ToolCallResponse> {
@@ -230,10 +229,21 @@ export class McpCreatorService implements OnModuleInit {
       config,
       toolName,
       args,
-      confirmedByHuman,
       confirmationToken,
       authSession,
     );
+  }
+
+  getApprovalRequest(token: string) {
+    return this.executor.getApprovalRequest(token);
+  }
+
+  approveConfirmation(token: string): boolean {
+    return this.executor.approveConfirmation(token);
+  }
+
+  rejectConfirmation(token: string): boolean {
+    return this.executor.rejectConfirmation(token);
   }
 
   async enrichWithWordpress(

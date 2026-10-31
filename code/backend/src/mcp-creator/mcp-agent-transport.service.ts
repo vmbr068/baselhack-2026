@@ -72,10 +72,6 @@ export class McpAgentTransportService {
         `MCP Agent calling tool '${name}' on server '${config.serverId}'`,
       );
 
-      const confirmedByHuman =
-        typeof args.confirmed_by_human === 'boolean'
-          ? args.confirmed_by_human
-          : undefined;
       const confirmationToken =
         typeof args.confirmation_token === 'string'
           ? args.confirmation_token
@@ -85,7 +81,6 @@ export class McpAgentTransportService {
         config.serverId,
         name,
         args,
-        confirmedByHuman,
         confirmationToken,
       );
 

@@ -17,6 +17,16 @@ describe('McpCreatorController (e2e)', () => {
 
   let baseUrl: string;
 
+  const approve = (details: { approval_url: string }) =>
+    request(app.getHttpServer())
+      .post(new URL(details.approval_url).pathname)
+      .expect(200);
+
+  const callReserve = (serverId: string, body: Record<string, unknown>) =>
+    request(app.getHttpServer())
+      .post(`/api/v1/servers/${serverId}/call`)
+      .send({ tool_name: 'reserve_room', ...body });
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -136,6 +146,8 @@ describe('McpCreatorController (e2e)', () => {
         tool_name: 'reserve_room',
         arguments: {
           room_title: 'Deluxe Rhine View Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
           guest_name: 'Sacha Ramstein',
           guest_email: 'sacha@baselhack.ch',
         },
@@ -154,52 +166,82 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.body.data.blocked).toBe(true);
 
     pendingToken = res.body.confirmation_details.token;
+    pendingDetails = res.body.confirmation_details;
   });
 
-  it('/api/v1/servers/:id/call (POST) should PROCEED with reserve_room when explicitly confirmed by human', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/api/v1/servers/latest/call')
-      .send({
-        tool_name: 'reserve_room',
-        confirmed_by_human: true,
-        confirmation_token: pendingToken,
-        arguments: {
-          room_title: 'Deluxe Rhine View Suite',
-          check_in: '2026-12-05',
-          check_out: '2026-12-07',
-          guest_name: 'Sacha Ramstein',
-          guest_email: 'sacha@baselhack.ch',
-        },
-      });
+  it('/api/v1/servers/:id/call (POST) should stay blocked until a human approves', async () => {
+    const res = await callReserve('latest', {
+      confirmation_token: pendingToken,
+    });
+
+    expect(res.body.success).toBe(false);
+    expect(res.body.status).toBe('pending_confirmation');
+  });
+
+  it('/api/v1/servers/:id/call (POST) should ignore a confirmed_by_human flag sent by the agent', async () => {
+    const stay = {
+      room_title: 'Deluxe Rhine View Suite',
+      check_in: '2026-12-05',
+      check_out: '2026-12-07',
+      guest_name: 'Sacha Ramstein',
+      guest_email: 'sacha@baselhack.ch',
+    };
+    const inBody = await callReserve('latest', {
+      confirmed_by_human: true,
+      arguments: stay,
+    });
+    const inArguments = await callReserve('latest', {
+      arguments: { ...stay, confirmed_by_human: true },
+    });
+
+    expect(inBody.body.status).toBe('pending_confirmation');
+    expect(inArguments.body.status).toBe('pending_confirmation');
+  });
+
+  it('/confirm/:token (GET) should show the request with its values escaped', async () => {
+    const pending = await callReserve('latest', {
+      arguments: {
+        room_title: '<script>alert(1)</script>',
+        check_in: '2026-12-05',
+        check_out: '2026-12-07',
+        guest_name: 'Sacha',
+        guest_email: 'sacha@baselhack.ch',
+      },
+    });
+    const url = new URL(pending.body.confirmation_details.approval_url);
+
+    const page = await request(app.getHttpServer()).get(url.pathname);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(page.text).not.toContain('<script>');
+
+    await request(app.getHttpServer())
+      .post(`${url.pathname}/reject`)
+      .expect(200);
+    await request(app.getHttpServer()).get(url.pathname).expect(404);
+  });
+
+  it('/api/v1/servers/:id/call (POST) should run what the human approved, only once', async () => {
+    await approve(pendingDetails);
+
+    const res = await callReserve('latest', {
+      confirmation_token: pendingToken,
+      arguments: { room_title: 'Another room the human never saw' },
+    });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.status).toBe('executed');
     expect(res.body.data.status).toBe('confirmed');
+    expect(res.body.data.room_title).toBe('Deluxe Rhine View Suite');
     expect(res.body.data.confirmation_summary).toContain(
       'Reservation Confirmed',
     );
-  }, 30000);
 
-  it('/api/v1/servers/:id/call (POST) should accept confirmed_by_human flag passed directly inside tool arguments', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/api/v1/servers/latest/call')
-      .send({
-        tool_name: 'reserve_room',
-        arguments: {
-          room_title: 'Deluxe Rhine View Suite',
-          check_in: '2026-12-05',
-          check_out: '2026-12-07',
-          guest_name: 'Sacha Ramstein',
-          guest_email: 'sacha@baselhack.ch',
-          confirmed_by_human: true,
-        },
-      });
-
-    expect(res.status).toBe(201);
-    expect(res.body.success).toBe(true);
-    expect(res.body.status).toBe('executed');
-    expect(res.body.data.status).toBe('confirmed');
+    const reused = await callReserve('latest', {
+      confirmation_token: pendingToken,
+    });
+    expect(reused.body.status).toBe('rejected');
   }, 30000);
 
   it('should keep a redacted audit trail of tool calls and confirmations', async () => {
@@ -214,10 +256,10 @@ describe('McpCreatorController (e2e)', () => {
     const entries = lines.map((l) => JSON.parse(l));
     const reserves = entries.filter((e) => e.tool === 'reserve_room');
 
-    expect(reserves.at(-3).status).toBe('pending_confirmation');
-    expect(reserves.at(-2).confirmed_by_human).toBe(true);
-    expect(reserves.at(-2).status).toBe('executed');
-    expect(reserves.at(-2).time).toBeDefined();
+    const executed = reserves.findLast((e) => e.status === 'executed');
+    expect(reserves[0].status).toBe('pending_confirmation');
+    expect(executed.confirmed_by_human).toBe(true);
+    expect(executed.time).toBeDefined();
     expect(lines.join('\n')).not.toContain(pendingToken);
   });
 
@@ -255,6 +297,7 @@ describe('McpCreatorController (e2e)', () => {
     expect(res.body.message).toContain('Invalid GitHub repository URL');
   });
 
+  let pendingDetails: { approval_url: string };
   let vipServerId: string;
 
   it('/api/v1/generate (POST) should scan and generate an MCP for an authenticated portal using delegated auth session', async () => {
@@ -281,19 +324,20 @@ describe('McpCreatorController (e2e)', () => {
   }, 30000);
 
   it('/api/v1/servers/:id/call (POST) should execute reserve_room on authenticated portal using stored delegated session', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/api/v1/servers/${vipServerId}/call`)
-      .send({
-        tool_name: 'reserve_room',
-        confirmed_by_human: true,
-        arguments: {
-          room_title: 'Executive VIP Penthouse Suite',
-          check_in: '2026-12-05',
-          check_out: '2026-12-07',
-          guest_name: 'Executive Member',
-          guest_email: 'vip@baselhack.ch',
-        },
-      });
+    const pending = await callReserve(vipServerId, {
+      arguments: {
+        room_title: 'Executive VIP Penthouse Suite',
+        check_in: '2026-12-05',
+        check_out: '2026-12-07',
+        guest_name: 'Executive Member',
+        guest_email: 'vip@baselhack.ch',
+      },
+    });
+    await approve(pending.body.confirmation_details);
+
+    const res = await callReserve(vipServerId, {
+      confirmation_token: pending.body.confirmation_details.token,
+    });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
@@ -400,10 +444,12 @@ describe('McpCreatorController (e2e)', () => {
       const blockedResult = await mcpClient.callTool({
         name: 'reserve_room',
         arguments: {
-          room_title: 'Deluxe Rhine View Suite',
+          room_title: 'Executive VIP Penthouse Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
           guest_name: 'Agent User',
           guest_email: 'agent@baselhack.ch',
-          confirmed_by_human: false,
+          guest_phone: '+41 00 000 00 00',
         },
       });
 
@@ -418,19 +464,11 @@ describe('McpCreatorController (e2e)', () => {
 
       const token = blockedParsed.confirmation_details.token;
 
-      // Now call with human confirmation and token
+      // The human approves on the page, then the agent calls again.
+      await approve(blockedParsed.confirmation_details);
       const confirmedResult = await mcpClient.callTool({
         name: 'reserve_room',
-        arguments: {
-          room_title: 'Executive VIP Penthouse Suite',
-          check_in: '2026-12-05',
-          check_out: '2026-12-07',
-          guest_name: 'Agent User',
-          guest_email: 'agent@baselhack.ch',
-          guest_phone: '+41 00 000 00 00',
-          confirmed_by_human: true,
-          confirmation_token: token,
-        },
+        arguments: { confirmation_token: token },
       });
 
       const confirmedText = (
@@ -447,34 +485,36 @@ describe('McpCreatorController (e2e)', () => {
     }, 30000);
 
     it('should refuse to book an unknown room or a stay without dates', async () => {
-      const book = (args: Record<string, unknown>) =>
-        request(app.getHttpServer())
-          .post('/api/v1/servers/latest/call')
-          .send({
-            tool_name: 'reserve_room',
-            confirmed_by_human: true,
-            arguments: {
-              guest_name: 'Agent User',
-              guest_email: 'agent@baselhack.ch',
-              ...args,
-            },
-          });
+      const guest = {
+        guest_name: 'Agent User',
+        guest_email: 'agent@baselhack.ch',
+      };
 
-      const unknownRoom = await book({
-        room_title: 'Imaginary Suite',
-        check_in: '2026-12-05',
-        check_out: '2026-12-07',
+      const noDates = await callReserve('latest', {
+        arguments: {
+          ...guest,
+          room_title: 'Executive VIP Penthouse Suite',
+        },
       });
-      expect(unknownRoom.body.success).toBe(false);
-      expect(unknownRoom.body.error).toContain('Nothing was booked');
-
-      const noDates = await book({
-        room_title: 'Executive VIP Penthouse Suite',
-      });
-      expect(noDates.body.success).toBe(false);
+      expect(noDates.body.status).toBe('rejected');
       expect(noDates.body.error).toContain(
         'check_in and check_out are required',
       );
+
+      const pending = await callReserve('latest', {
+        arguments: {
+          ...guest,
+          room_title: 'Imaginary Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
+        },
+      });
+      await approve(pending.body.confirmation_details);
+      const unknownRoom = await callReserve('latest', {
+        confirmation_token: pending.body.confirmation_details.token,
+      });
+      expect(unknownRoom.body.success).toBe(false);
+      expect(unknownRoom.body.error).toContain('Nothing was booked');
     }, 30000);
   });
 });

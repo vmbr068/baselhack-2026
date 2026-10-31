@@ -14,6 +14,7 @@ in
     environment = {
       NODE_ENV = "production";
       PORT = "3000";
+      PUBLIC_BASE_URL = "https://api.bh2026.tekitup.net";
       CHROMIUM_PATH = lib.getExe pkgs.chromium;
       HOME = "/var/lib/mcp-exchange-backend";
     };

@@ -55,8 +55,6 @@ async function main() {
         body: JSON.stringify({
           tool_name: request.params.name,
           arguments: request.params.arguments || {},
-          confirmed_by_human:
-            request.params.arguments?.confirmed_by_human ?? true,
           confirmation_token: request.params.arguments?.confirmation_token,
         }),
       },

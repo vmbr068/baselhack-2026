@@ -187,16 +187,10 @@ export class SynthesizerService {
               type: 'string',
               description: 'Any special preferences or requests (optional)',
             },
-            confirmed_by_human: {
-              type: 'boolean',
-              description:
-                'Explicit confirmation flag. Must be true to execute this irreversible booking action.',
-              default: false,
-            },
             confirmation_token: {
               type: 'string',
               description:
-                'Token provided by the pending confirmation request when confirmation is asked.',
+                'Token returned by the first call. Send it only after the user approved on the approval link.',
             },
           },
           required: [

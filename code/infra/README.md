@@ -30,8 +30,12 @@ its dependencies changed, then merge.
 
 ## Secrets
 
-`secrets/tofu.yaml` holds the Proxmox token and the state passphrase. Read it with
-`sops decrypt secrets/tofu.yaml`.
+`secrets/tofu.yaml` holds the Proxmox token, the state passphrase and the Resend
+API key. Read it with `sops decrypt secrets/tofu.yaml`.
+
+`tf apply` writes the Resend key to `/etc/hotel-demo/env` only when it installs the
+VM. To change it on a running VM, update that file too and restart
+`hotel-demo-api`.
 
 ## Not kept across a rebuild
 

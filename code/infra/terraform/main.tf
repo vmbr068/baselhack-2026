@@ -103,7 +103,8 @@ module "nixos" {
   nixos_partitioner_attr = "${local.flake}#nixosConfigurations.${local.server.name}.config.system.build.diskoScript"
 
   # Reached through the public IP (1:1 NAT): the VLAN is not routed to us.
-  target_host  = local.server.public_ip
-  install_user = "debian"
-  instance_id  = proxmox_virtual_environment_vm.server.id
+  target_host        = local.server.public_ip
+  install_user       = "debian"
+  instance_id        = proxmox_virtual_environment_vm.server.id
+  extra_files_script = "${path.module}/hotel-demo-secrets.sh"
 }

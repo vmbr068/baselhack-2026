@@ -59,6 +59,7 @@ in
       API_PORT = "3001";
       HOME = "/var/lib/hotel-demo";
       TSX_DISABLE_CACHE = "1";
+      RESEND_FROM_EMAIL = "Rheinblick <bookings@mail.bh2026.tekitup.net>";
     };
 
     serviceConfig = {
@@ -66,6 +67,9 @@ in
       Group = "hotel";
       StateDirectory = "hotel-demo";
       WorkingDirectory = apiDir;
+      # Holds RESEND_API_KEY, out of this public repository. Without it the site
+      # still works, but sends no confirmation email.
+      EnvironmentFile = "-/etc/hotel-demo/env";
       ExecStartPre = initDatabase;
       ExecStart = "${tsx} src/index.ts";
       Restart = "on-failure";

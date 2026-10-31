@@ -48,6 +48,15 @@ describe('McpCreatorController (e2e)', () => {
     expect(toolNames).toContain('get_current_status');
   }, 30000);
 
+  it('/api/v1/generate (POST) should return 422 when the site is unreachable', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/generate')
+      .send({ url: 'http://localhost:5173/' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toContain('Cannot reach http://localhost:5173/');
+  }, 30000);
+
   it('/api/v1/servers/:id/call (POST) should execute check_availability via Playwright', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/servers/latest/call')

@@ -37,4 +37,9 @@ describe('assertAllowedSite', () => {
       ForbiddenException,
     );
   });
+
+  it('allows every site when ALLOWED_SITE_ORIGINS is *', () => {
+    process.env.ALLOWED_SITE_ORIGINS = '*';
+    expect(() => assertAllowedSite('https://a.example/x')).not.toThrow();
+  });
 });

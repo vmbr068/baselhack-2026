@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { McpCreatorService } from '../mcp-creator/mcp-creator.service.js';
 import type { MCPServerConfig } from '../mcp-creator/mcp-creator.types.js';
 import type {
+  ExchangeConnectionResponse,
   ExchangeEntry,
   ExchangeEntrySummary,
   ExchangeVersion,
@@ -138,6 +139,59 @@ export class McpExchangeService implements OnModuleInit {
       source_url: entry.sourceUrl,
       site_title: entry.siteTitle,
       ...this.toVersionSummary(found),
+    };
+  }
+
+  getConnection(
+    entryId: string,
+    version: number,
+    baseUrl: string,
+  ): ExchangeConnectionResponse {
+    const entry = this.findEntry(entryId);
+    const found = entry.versions.find((v) => v.version === version);
+    if (!found) {
+      throw new NotFoundException(
+        `Version ${version} not found for entry '${entryId}'. Available versions: ${entry.versions.map((v) => v.version).join(', ')}`,
+      );
+    }
+
+    const serverId = found.server.serverId;
+    // The Exchange hands out the address of the live transport; it does not proxy agent traffic.
+    let available = true;
+    try {
+      this.mcpCreator.getServer(serverId);
+    } catch {
+      available = false;
+    }
+
+    const base = baseUrl.replace(/\/$/, '');
+    const sseUrl = `${base}/api/v1/servers/${encodeURIComponent(serverId)}/mcp/sse`;
+    const name = entry.siteTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40);
+
+    return {
+      entry_id: entry.entryId,
+      version: found.version,
+      server_id: serverId,
+      site_title: entry.siteTitle,
+      available,
+      transports: {
+        sse_url: sseUrl,
+        messages_url: `${base}/api/v1/servers/${encodeURIComponent(serverId)}/mcp/messages`,
+        stdio: {
+          command: 'node',
+          args: ['code/backend/bin/mcp-runner.mjs', serverId],
+          env: { MCP_BACKEND_URL: base },
+        },
+      },
+      claude_config: {
+        mcpServers: {
+          [name || serverId]: { type: 'sse', url: sseUrl },
+        },
+      },
     };
   }
 

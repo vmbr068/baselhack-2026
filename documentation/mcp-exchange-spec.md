@@ -1,9 +1,8 @@
 # MCP Exchange — functional specification
 
 > Issue [#22](https://github.com/vmbr068/baselhack-2026/issues/22) · Epic [E5 #7](https://github.com/vmbr068/baselhack-2026/issues/7)
-> **Status: draft** — needs review by Sacha and Gabin. The scope assumptions in
-> section 2 come from [#13](https://github.com/vmbr068/baselhack-2026/issues/13)
-> and must be confirmed with vmbr0.
+> **Status: v2** — section 2 records the scope decisions settled in
+> [#13](https://github.com/vmbr068/baselhack-2026/issues/13).
 
 ## 1. What the Exchange is, and for whom
 
@@ -25,16 +24,18 @@ MCP for our hotel site and let an agent book through it — must work without it
 The Exchange extends the pitch ("generate once, every agent can reuse it") and
 must never block the demo.
 
-## 2. Scope decisions (working assumptions from #13, to confirm)
+## 2. Scope decisions (issue #13 — settled)
 
 1. The Exchange is a **catalogue for publishing and finding generated MCPs** —
    not a marketplace (no payments, ratings or moderation).
-2. **Login protects publishing** to the Exchange and the MCP creator interface.
-   Browsing and searching the Exchange, and the demo hotel site, stay public.
-3. The Exchange lives in the **existing FastAPI service** (`code/mcp_creator`),
-   extending its current registry (`generated_servers/` + `/api/v1/servers`).
-   The NestJS backend and the database schema (#20) can take over later without
-   changing the flows below; the API is designed so this swap stays possible.
+2. **Publishing requires a business owner login** — the fictitious accounts
+   built in #85 (`POST /api/v1/auth/login`, Bearer token). The publisher is
+   recorded in the published version's metadata. Browsing, searching and
+   connecting an agent stay public, and so does the demo hotel site.
+3. The Exchange lives in the **NestJS backend**
+   (`code/backend/src/mcp-exchange/`), next to the MCP creator ported in #63.
+   Entries persist as JSON in `exchange_store/` until the database work
+   (#20/#87) takes over.
 
 ## 3. User flows
 
@@ -137,11 +138,7 @@ Prefix `/api/v1/exchange`, in the existing FastAPI service:
 
 ## 8. Open questions
 
-1. Confirm assumptions of section 2 with vmbr0 (#13), in particular FastAPI
-   vs NestJS+DB (#20) as the home of the Exchange.
-2. Login mechanism and user identity: reuse of #27/#38 work — what is a
-   "publisher" concretely (username only is fine for the demo)?
-3. Does the demo use the Exchange on stage (nice-to-have ending: "and the MCP
+1. Does the demo use the Exchange on stage (nice-to-have ending: "and the MCP
    is now published for every agent"), or is it shown separately?
 
 ## 9. Issue mapping

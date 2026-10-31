@@ -139,7 +139,9 @@ describe('McpExchangeController (e2e)', () => {
   });
 
   it('/api/v1/exchange/mcps/:entryId (GET) should return the detail with versions and tools', async () => {
-    const list = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+    const list = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps',
+    );
     const entryId = list.body[0].entry_id;
 
     const res = await request(app.getHttpServer()).get(
@@ -155,7 +157,9 @@ describe('McpExchangeController (e2e)', () => {
   });
 
   it('/api/v1/exchange/mcps/:entryId/versions/:n (GET) should return one version with its tools', async () => {
-    const list = await request(app.getHttpServer()).get('/api/v1/exchange/mcps');
+    const list = await request(app.getHttpServer()).get(
+      '/api/v1/exchange/mcps',
+    );
     const entryId = list.body[0].entry_id;
 
     const res = await request(app.getHttpServer()).get(

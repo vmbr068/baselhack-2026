@@ -49,18 +49,26 @@ export class McpExchangeController {
   }
 
   @ApiOperation({
-    summary: 'Get the detail of a published MCP: all its versions and their tools',
+    summary:
+      'Get the detail of a published MCP: all its versions and their tools',
   })
-  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({
+    name: 'entryId',
+    example: 'ex_localhost-3000-mock-hotel_89bc5b29',
+  })
   @Get('mcps/:entryId')
   getMcp(@Param('entryId') entryId: string): PublishResponse {
     return this.mcpExchangeService.getEntry(entryId);
   }
 
   @ApiOperation({
-    summary: 'Get one published version of an MCP, with its tools and call endpoint',
+    summary:
+      'Get one published version of an MCP, with its tools and call endpoint',
   })
-  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({
+    name: 'entryId',
+    example: 'ex_localhost-3000-mock-hotel_89bc5b29',
+  })
   @ApiParam({ name: 'version', example: 1 })
   @Get('mcps/:entryId/versions/:version')
   getMcpVersion(
@@ -74,7 +82,10 @@ export class McpExchangeController {
     summary:
       'Get the connection details of a published version: MCP SSE endpoint, stdio bridge command and ready-to-paste Claude configuration',
   })
-  @ApiParam({ name: 'entryId', example: 'ex_localhost-3000-mock-hotel_89bc5b29' })
+  @ApiParam({
+    name: 'entryId',
+    example: 'ex_localhost-3000-mock-hotel_89bc5b29',
+  })
   @ApiParam({ name: 'version', example: 1 })
   @Get('mcps/:entryId/versions/:version/connection')
   getMcpConnection(

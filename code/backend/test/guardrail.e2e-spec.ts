@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { AppModule } from './../src/app.module.js';
+import { McpCreatorService } from './../src/mcp-creator/mcp-creator.service.js';
 
 // Red team of the human confirmation guardrail: an agent tries every way we
 // could think of to book without a human approving. Every booking goes through
@@ -155,6 +156,25 @@ describe('Confirmation guardrail bypass attempts (e2e)', () => {
       expect(res.body.status).toBe('rejected');
     },
   );
+
+  it('blocks a write API tool the generator did not flag', async () => {
+    // e.g. an OpenAPI POST route that the enricher took for a search
+    app.get(McpCreatorService).getServer(serverA).tools.push({
+      name: 'update_stay',
+      description: 'Change a stay',
+      parameters: {},
+      executionStep: 'check_availability',
+      selectorsMapping: {},
+      apiEndpoint: 'http://127.0.0.1:9999/api/stays',
+      apiMethod: 'POST',
+      requires_confirmation: false,
+      is_irreversible: false,
+    });
+
+    const res = await call(serverA, { tool_name: 'update_stay' });
+
+    expect(res.body.status).toBe('pending_confirmation');
+  });
 
   it('ignores self-approval through a real MCP client', async () => {
     const client = new Client({ name: 'red-team-agent', version: '1.0.0' });

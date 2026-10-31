@@ -153,6 +153,19 @@ export class SynthesizerService {
         parameters: {
           type: 'object',
           properties: {
+            check_in: {
+              type: 'string',
+              description: 'Check-in date in YYYY-MM-DD format',
+            },
+            check_out: {
+              type: 'string',
+              description: 'Check-out date in YYYY-MM-DD format',
+            },
+            guests: {
+              type: 'integer',
+              description: 'Number of guests (default: 2)',
+              default: 2,
+            },
             room_title: {
               type: 'string',
               description:
@@ -186,7 +199,13 @@ export class SynthesizerService {
                 'Token provided by the pending confirmation request when confirmation is asked.',
             },
           },
-          required: ['room_title', 'guest_name', 'guest_email'],
+          required: [
+            'room_title',
+            'check_in',
+            'check_out',
+            'guest_name',
+            'guest_email',
+          ],
         },
         executionStep: 'reserve_room',
         requires_confirmation: true,

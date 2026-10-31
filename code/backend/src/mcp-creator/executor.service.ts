@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { chromium, Browser } from 'playwright';
+import { chromium, Browser, Page } from 'playwright';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import {
@@ -13,6 +13,9 @@ import {
   blockDisallowedNavigation,
 } from './site-allowlist.js';
 import { appendAuditEntry } from './audit-log.js';
+
+const ROOM_CARD_SELECTOR = '.room-card, .room-item, [data-room-id], article';
+const MAX_BOOKING_STEPS = 6;
 
 @Injectable()
 export class ExecutorService {
@@ -291,62 +294,8 @@ export class ExecutorService {
 
       // 1. check_availability
       if (toolDef.executionStep === 'check_availability') {
-        const checkIn = args.check_in;
-        const checkOut = args.check_out;
-        const guests = String(args.guests || 2);
-
-        if (selectors.check_in_input && checkIn) {
-          await page.fill(selectors.check_in_input, checkIn, { timeout: 5000 });
-        }
-        if (selectors.check_out_input && checkOut) {
-          await page.fill(selectors.check_out_input, checkOut, {
-            timeout: 5000,
-          });
-        }
-        if (selectors.guests_input) {
-          try {
-            await page.selectOption(selectors.guests_input, guests, {
-              timeout: 5000,
-            });
-          } catch {
-            try {
-              await page.fill(selectors.guests_input, guests, {
-                timeout: 5000,
-              });
-            } catch {}
-          }
-        }
-
-        if (selectors.search_button) {
-          await page.click(selectors.search_button, { timeout: 5000 });
-          await page.waitForTimeout(1500);
-        }
-
-        const rooms = await page.evaluate(() => {
-          const results: Array<{
-            title: string;
-            description?: string;
-            price?: string;
-          }> = [];
-          const cards = document.querySelectorAll(
-            '.room-card, .room-item, [data-room-id]',
-          );
-          cards.forEach((c) => {
-            const title = (
-              c.querySelector('.room-title, h3, h4') as HTMLElement
-            )?.innerText?.trim();
-            const desc = (
-              c.querySelector('.room-desc, p') as HTMLElement
-            )?.innerText?.trim();
-            const price = (
-              c.querySelector('.room-price, .price') as HTMLElement
-            )?.innerText?.trim();
-            if (title) {
-              results.push({ title, description: desc, price });
-            }
-          });
-          return results;
-        });
+        await this.searchRooms(page, selectors, args);
+        const rooms = await this.extractRooms(page);
 
         const filename = `action_${Date.now()}.png`;
         await page.screenshot({
@@ -359,9 +308,9 @@ export class ExecutorService {
           status: 'executed',
           data: {
             hotel: config.hotelName,
-            check_in: checkIn,
-            check_out: checkOut,
-            guests,
+            check_in: args.check_in,
+            check_out: args.check_out,
+            guests: String(args.guests || 2),
             rooms_count: rooms.length,
             available_rooms: rooms,
           },
@@ -371,105 +320,79 @@ export class ExecutorService {
 
       // 2. reserve_room
       if (toolDef.executionStep === 'reserve_room') {
-        const roomTitle = args.room_title || '';
-        const guestName = args.guest_name || '';
-        const guestEmail = args.guest_email || '';
-        const guestPhone = args.guest_phone || '';
-        const specialRequests = args.special_requests || '';
-
-        // Trigger search first if needed
-        try {
-          const searchBtn = page
-            .locator("#btn-search-rooms, button:has-text('Search')")
-            .first();
-          if (await searchBtn.isVisible()) {
-            await searchBtn.click();
-            await page.waitForTimeout(1000);
-          }
-        } catch {}
-
-        // Click reserve button
-        let reserveClicked = false;
-        if (roomTitle) {
-          try {
-            const roomCard = page
-              .locator(`.room-card:has-text('${roomTitle}')`)
-              .first();
-            if (await roomCard.isVisible()) {
-              const bookBtn = roomCard.locator('button, .btn-book').first();
-              await bookBtn.click();
-              reserveClicked = true;
-            }
-          } catch {}
+        const roomTitle: string = args.room_title || '';
+        if (!args.check_in || !args.check_out) {
+          return {
+            tool_name: toolName,
+            success: false,
+            status: 'rejected',
+            data: { hotel: config.hotelName, room_title: roomTitle },
+            error: 'check_in and check_out are required. Nothing was booked.',
+          };
         }
+        const searchTool = config.tools.find(
+          (t) => t.executionStep === 'check_availability',
+        );
+        await this.searchRooms(page, searchTool?.selectorsMapping ?? {}, args);
 
-        if (!reserveClicked) {
-          try {
-            const firstBook = page
-              .locator(
-                ".btn-book, button:has-text('Reserve'), button:has-text('Book')",
-              )
-              .first();
-            await firstBook.click();
-          } catch {}
+        const card = page
+          .locator(ROOM_CARD_SELECTOR)
+          .filter({ hasText: roomTitle })
+          .first();
+        if (!roomTitle || !(await card.isVisible())) {
+          return {
+            tool_name: toolName,
+            success: false,
+            status: 'rejected',
+            data: { hotel: config.hotelName, room_title: roomTitle },
+            error: `Room '${roomTitle}' is not available for these dates. Nothing was booked.`,
+          };
         }
+        await card
+          .locator('a, button')
+          .filter({ hasText: /reserve|book|select|view|details/i })
+          .first()
+          .click({ timeout: 5000 });
+        await this.settle(page);
 
-        await page.waitForTimeout(800);
-
-        if (selectors.guest_name_input && guestName) {
-          await page.fill(selectors.guest_name_input, guestName, {
-            timeout: 5000,
-          });
-        }
-        if (selectors.guest_email_input && guestEmail) {
-          await page.fill(selectors.guest_email_input, guestEmail, {
-            timeout: 5000,
-          });
-        }
-        if (selectors.guest_phone_input && guestPhone) {
-          await page.fill(selectors.guest_phone_input, guestPhone, {
-            timeout: 5000,
-          });
-        }
-        if (selectors.special_requests_input && specialRequests) {
-          await page.fill(selectors.special_requests_input, specialRequests, {
-            timeout: 5000,
-          });
-        }
-
-        const confirmBtn =
-          selectors.confirm_button || '#btn-confirm-reservation';
-        await page.click(confirmBtn, { timeout: 5000 });
-        await page.waitForTimeout(1500);
-
-        const confText = await page.evaluate(() => {
-          const confEl = document.querySelector<HTMLElement>(
-            '#confirmation-view, .confirmation-card, .success-message',
-          );
-          return confEl
-            ? confEl.innerText.trim()
-            : 'Reservation request submitted.';
-        });
+        const confirmed = await this.completeBooking(page, selectors, args);
+        const summary = await page
+          .locator('#confirmation-view, .confirmation-card, main, body')
+          .filter({ visible: true })
+          .first()
+          .innerText();
 
         const filename = `confirm_${Date.now()}.png`;
         await page.screenshot({
           path: path.join(this.screenshotDir, filename),
         });
 
-        return {
-          tool_name: toolName,
-          success: true,
-          status: 'executed',
-          data: {
-            status: 'confirmed',
-            hotel: config.hotelName,
-            room_title: roomTitle,
-            guest_name: guestName,
-            guest_email: guestEmail,
-            confirmation_summary: confText,
-          },
-          screenshot_url: `/static/screenshots/${filename}`,
+        const data = {
+          hotel: config.hotelName,
+          room_title: roomTitle,
+          check_in: args.check_in,
+          check_out: args.check_out,
+          guest_name: args.guest_name,
+          guest_email: args.guest_email,
+          confirmation_summary: summary.trim().slice(0, 800),
         };
+        return confirmed
+          ? {
+              tool_name: toolName,
+              success: true,
+              status: 'executed',
+              data: { status: 'confirmed', ...data },
+              screenshot_url: `/static/screenshots/${filename}`,
+            }
+          : {
+              tool_name: toolName,
+              success: false,
+              status: 'rejected',
+              data: { status: 'unconfirmed', ...data },
+              error:
+                'The site did not show a booking confirmation. Do not tell the user the room is booked.',
+              screenshot_url: `/static/screenshots/${filename}`,
+            };
       }
 
       // 3. screenshot only
@@ -494,5 +417,155 @@ export class ExecutorService {
     } finally {
       await browser.close();
     }
+  }
+
+  /** Waits for a navigation or API call triggered by the last action. */
+  private async settle(page: Page): Promise<void> {
+    await page.waitForTimeout(300);
+    await page
+      .waitForLoadState('networkidle', { timeout: 5000 })
+      .catch(() => {});
+  }
+
+  private async searchRooms(
+    page: Page,
+    selectors: Record<string, string>,
+    args: Record<string, any>,
+  ): Promise<void> {
+    if (selectors.check_in_input && args.check_in) {
+      await page.fill(selectors.check_in_input, args.check_in, {
+        timeout: 5000,
+      });
+    }
+    if (selectors.check_out_input && args.check_out) {
+      await page.fill(selectors.check_out_input, args.check_out, {
+        timeout: 5000,
+      });
+    }
+    if (selectors.guests_input) {
+      const guests = String(args.guests || 2);
+      try {
+        await page.selectOption(selectors.guests_input, guests, {
+          timeout: 5000,
+        });
+      } catch {
+        try {
+          await page.fill(selectors.guests_input, guests, { timeout: 5000 });
+        } catch {}
+      }
+    }
+    if (selectors.search_button) {
+      await page.click(selectors.search_button, { timeout: 5000 });
+      await this.settle(page);
+    }
+  }
+
+  private async extractRooms(
+    page: Page,
+  ): Promise<Array<{ title: string; description?: string; price?: string }>> {
+    return page.evaluate((cardSelector) => {
+      const results: Array<{
+        title: string;
+        description?: string;
+        price?: string;
+      }> = [];
+      document.querySelectorAll<HTMLElement>(cardSelector).forEach((card) => {
+        const title = card
+          .querySelector<HTMLElement>('.room-title, h1, h2, h3, h4')
+          ?.innerText?.trim();
+        const text = card.innerText;
+        const price =
+          card.querySelector<HTMLElement>('.room-price, .price')?.innerText ??
+          /(?:CHF|EUR|USD|[$€£])\s?[\d'.,]+|[\d'.,]+\s?(?:CHF|EUR|USD|[$€£])/.exec(
+            text,
+          )?.[0];
+        // <article> is also used for news and reviews, so it needs a price.
+        if (!title || (card.matches('article') && !price)) return;
+        results.push({
+          title,
+          description: card
+            .querySelector<HTMLElement>('.room-desc, p')
+            ?.innerText?.trim(),
+          price: price?.trim(),
+        });
+      });
+      return results;
+    }, ROOM_CARD_SELECTOR);
+  }
+
+  private async fillFirstVisible(
+    page: Page,
+    candidates: Array<string | undefined>,
+    value: string | undefined,
+  ): Promise<void> {
+    if (!value) return;
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const field = page.locator(candidate).first();
+      if (await field.isVisible()) {
+        await field.fill(value, { timeout: 5000 });
+        return;
+      }
+    }
+  }
+
+  /** Walks a booking flow of any length until the site confirms the booking. */
+  private async completeBooking(
+    page: Page,
+    selectors: Record<string, string>,
+    args: Record<string, any>,
+  ): Promise<boolean> {
+    const isConfirmed = async () =>
+      /(reservation|booking)\s+(is\s+)?confirmed/i.test(
+        await page.locator('body').innerText(),
+      );
+
+    for (let step = 0; step < MAX_BOOKING_STEPS; step++) {
+      if (await isConfirmed()) return true;
+
+      await this.fillFirstVisible(
+        page,
+        [
+          selectors.guest_name_input,
+          'input[name*="name" i]:not([type=hidden])',
+        ],
+        args.guest_name,
+      );
+      await this.fillFirstVisible(
+        page,
+        [selectors.guest_email_input, 'input[type=email]'],
+        args.guest_email,
+      );
+      await this.fillFirstVisible(
+        page,
+        [selectors.guest_phone_input, 'input[type=tel]'],
+        args.guest_phone,
+      );
+      await this.fillFirstVisible(
+        page,
+        [selectors.special_requests_input, 'textarea'],
+        args.special_requests,
+      );
+
+      const actions = [
+        page.locator('form:has(input[type=email]) button[type=submit]'),
+        page.locator('button, a').filter({ hasText: /confirm/i }),
+        page
+          .locator('main a, main button')
+          .filter({ hasText: /continue|reserve|book/i }),
+      ];
+      let clicked = false;
+      for (const action of actions) {
+        const target = action.filter({ visible: true }).first();
+        if (await target.isVisible()) {
+          await target.click({ timeout: 5000 });
+          clicked = true;
+          break;
+        }
+      }
+      if (!clicked) return false;
+      await this.settle(page);
+    }
+    return isConfirmed();
   }
 }

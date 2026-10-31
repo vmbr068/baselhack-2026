@@ -5,7 +5,7 @@
   services.caddy = {
     enable = true;
     environmentFile = "/etc/caddy-secrets/env";
-    virtualHosts."api.ba2026.tekitup.net".extraConfig = ''
+    virtualHosts."api.bh2026.tekitup.net".extraConfig = ''
       basic_auth {
         demo {$BASIC_AUTH_HASH}
       }

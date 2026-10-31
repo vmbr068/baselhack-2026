@@ -19,7 +19,7 @@ Then commit `terraform/terraform.tfstate`: it changes on every apply.
 
 ## Daily changes
 
-Merging to `main` is enough for the NixOS configuration and the backend: comin
+Merging to `main` is enough for the NixOS configuration, backend and frontend: comin
 deploys them within minutes. Changes in `terraform/` or to the VM size in
 `server.json` need `tf apply`.
 

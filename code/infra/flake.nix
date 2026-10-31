@@ -40,7 +40,10 @@
         ];
       };
 
-      packages.${system}.backend = pkgs.callPackage ./nixos/backend-package.nix { };
+      packages.${system} = {
+        backend = pkgs.callPackage ./nixos/backend-package.nix { };
+        frontend = pkgs.callPackage ./nixos/frontend-package.nix { };
+      };
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [

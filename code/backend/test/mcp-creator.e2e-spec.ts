@@ -165,6 +165,8 @@ describe('McpCreatorController (e2e)', () => {
         confirmation_token: pendingToken,
         arguments: {
           room_title: 'Deluxe Rhine View Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
           guest_name: 'Sacha Ramstein',
           guest_email: 'sacha@baselhack.ch',
         },
@@ -186,6 +188,8 @@ describe('McpCreatorController (e2e)', () => {
         tool_name: 'reserve_room',
         arguments: {
           room_title: 'Deluxe Rhine View Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
           guest_name: 'Sacha Ramstein',
           guest_email: 'sacha@baselhack.ch',
           confirmed_by_human: true,
@@ -284,6 +288,8 @@ describe('McpCreatorController (e2e)', () => {
         confirmed_by_human: true,
         arguments: {
           room_title: 'Executive VIP Penthouse Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
           guest_name: 'Executive Member',
           guest_email: 'vip@baselhack.ch',
         },
@@ -416,9 +422,12 @@ describe('McpCreatorController (e2e)', () => {
       const confirmedResult = await mcpClient.callTool({
         name: 'reserve_room',
         arguments: {
-          room_title: 'Deluxe Rhine View Suite',
+          room_title: 'Executive VIP Penthouse Suite',
+          check_in: '2026-12-05',
+          check_out: '2026-12-07',
           guest_name: 'Agent User',
           guest_email: 'agent@baselhack.ch',
+          guest_phone: '+41 00 000 00 00',
           confirmed_by_human: true,
           confirmation_token: token,
         },
@@ -432,6 +441,40 @@ describe('McpCreatorController (e2e)', () => {
       expect(confirmedParsed.success).toBe(true);
       expect(confirmedParsed.status).toBe('executed');
       expect(confirmedParsed.data.status).toBe('confirmed');
+      expect(confirmedParsed.data.confirmation_summary).toContain(
+        'Reservation Confirmed',
+      );
+    }, 30000);
+
+    it('should refuse to book an unknown room or a stay without dates', async () => {
+      const book = (args: Record<string, unknown>) =>
+        request(app.getHttpServer())
+          .post('/api/v1/servers/latest/call')
+          .send({
+            tool_name: 'reserve_room',
+            confirmed_by_human: true,
+            arguments: {
+              guest_name: 'Agent User',
+              guest_email: 'agent@baselhack.ch',
+              ...args,
+            },
+          });
+
+      const unknownRoom = await book({
+        room_title: 'Imaginary Suite',
+        check_in: '2026-12-05',
+        check_out: '2026-12-07',
+      });
+      expect(unknownRoom.body.success).toBe(false);
+      expect(unknownRoom.body.error).toContain('Nothing was booked');
+
+      const noDates = await book({
+        room_title: 'Executive VIP Penthouse Suite',
+      });
+      expect(noDates.body.success).toBe(false);
+      expect(noDates.body.error).toContain(
+        'check_in and check_out are required',
+      );
     }, 30000);
   });
 });

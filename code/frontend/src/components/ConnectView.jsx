@@ -5,6 +5,7 @@ import {
   IconGlobe,
   IconLightning,
   IconExternalLink,
+  IconLock,
 } from './Icons'
 
 export default function ConnectView({
@@ -22,11 +23,12 @@ export default function ConnectView({
   const [repoUrl, setRepoUrl] = useState('')
   const [branch, setBranch] = useState('main')
   const [showEnrichForm, setShowEnrichForm] = useState(false)
+  const [isInteractive, setIsInteractive] = useState(false)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!url.trim()) return
-    onAnalyze(url.trim())
+    onAnalyze(url.trim(), isInteractive)
   }
 
   const handleSuggestion = (suggestedUrl) => {
@@ -62,10 +64,54 @@ export default function ConnectView({
               className="pill-submit-btn"
               disabled={busy || !url.trim()}
             >
-              <IconPlus size={18} />
-              <span>Construire le MCP</span>
+              {isInteractive ? <IconLock size={18} /> : <IconPlus size={18} />}
+              <span>{isInteractive ? 'Ouvrir Sandbox & Connecter' : 'Construire le MCP'}</span>
             </button>
           </form>
+
+          {/* Interactive Login Sandbox Toggle */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: 14,
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onClick={() => setIsInteractive(!isInteractive)}
+          >
+            <input
+              type="checkbox"
+              id="interactive-mode-toggle"
+              checked={isInteractive}
+              onChange={(e) => setIsInteractive(e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                cursor: 'pointer',
+                accentColor: 'var(--accent-red)',
+                width: 15,
+                height: 15,
+              }}
+            />
+            <label
+              htmlFor="interactive-mode-toggle"
+              style={{
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontWeight: isInteractive ? 600 : 400,
+                color: isInteractive ? 'var(--accent-red)' : 'var(--text-secondary)',
+              }}
+            >
+              <IconLock size={14} />
+              <span>Ouvrir une sandbox pour se connecter (SSO / Login / Authentification)</span>
+            </label>
+          </div>
 
           {/* Quick Demo Suggestions */}
           <div className="connect-suggestions">
@@ -118,9 +164,27 @@ export default function ConnectView({
               <span className="step-indicator">✓</span>
               <span>1. Connexion au site web & capture DOM</span>
             </div>
+            {isInteractive && (
+              <div
+                style={{
+                  padding: '8px 14px',
+                  background: 'rgba(235, 16, 0, 0.08)',
+                  borderRadius: 'var(--radius-pill)',
+                  border: '1px solid rgba(235, 16, 0, 0.2)',
+                  color: 'var(--accent-red)',
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <IconLock size={14} />
+                <span>Une fenêtre de navigation sandbox est ouverte. Connectez-vous sur le site, elle se fermera automatiquement !</span>
+              </div>
+            )}
             <div className="analysis-step-item active">
               <span className="step-indicator">2</span>
-              <span>2. Détection des formulaires, chambres & actions</span>
+              <span>2. Détection des formulaires & actions</span>
             </div>
             <div className="analysis-step-item">
               <span className="step-indicator">3</span>

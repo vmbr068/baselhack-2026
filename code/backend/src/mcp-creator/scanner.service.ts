@@ -11,7 +11,9 @@ import {
   FormField,
   ActionButton,
   ScannedRoomOption,
+  AuthSessionData,
 } from './mcp-creator.types.js';
+import { normalizeAuthSession } from './auth-session.helper.js';
 import {
   assertAllowedSite,
   blockDisallowedNavigation,
@@ -31,19 +33,31 @@ export class ScannerService {
 
   async scanWebsite(
     url: string,
+    authSession?: AuthSessionData | string,
     headless = true,
     timeoutMs = 25000,
   ): Promise<WebScanResult> {
     assertAllowedSite(url);
-    this.logger.log(`Scanning website: ${url}`);
+    this.logger.log(
+      `Scanning website: ${url}${authSession ? ' [with authenticated session]' : ''}`,
+    );
+
     const browser: Browser = await chromium.launch({
       headless,
       executablePath: process.env.CHROMIUM_PATH,
     });
+
+    const { storageState, extraHeaders } = normalizeAuthSession(
+      authSession,
+      url,
+    );
+
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      storageState,
+      extraHTTPHeaders: extraHeaders,
     });
     await blockDisallowedNavigation(context);
     const page = await context.newPage();
@@ -211,6 +225,7 @@ export class ScannerService {
         buttons: buttonsData,
         detectedRooms: roomsData,
         screenshotPath: screenshotFilename,
+        authenticated: Boolean(storageState || extraHeaders),
       };
     } finally {
       await browser.close();

@@ -33,7 +33,11 @@ export const listMcpServers = () => request('/servers')
 export const getMcpServer = serverId =>
   request(`/servers/${encodeURIComponent(serverId)}`)
 
-export const generateMcp = url => request('/generate', jsonBody({ url }))
+export const generateMcp = (url, authSession) =>
+  request('/generate', jsonBody({ url, ...(authSession ? { auth_session: authSession } : {}) }))
+
+export const generateMcpInteractive = (url, timeoutMs) =>
+  request('/generate/interactive', jsonBody({ url, ...(timeoutMs ? { timeoutMs } : {}) }))
 
 export const enrichMcpWithGithub = (serverId, { repoUrl, branch, githubToken }) =>
   request(`/servers/${encodeURIComponent(serverId)}/enrich/github`, jsonBody({

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enrichMcpWithGithub, enrichMcpWithWordpress, generateMcp, getMcpServer, listMcpServers } from './api'
+import { enrichMcpWithGithub, enrichMcpWithWordpress, generateMcp, generateMcpInteractive, getMcpServer, listMcpServers } from './api'
 import MagicWand from '@react-spectrum/s2/icons/MagicWand'
 import Add from '@react-spectrum/s2/icons/Add'
 import ChartTrend from '@react-spectrum/s2/icons/ChartTrend'
@@ -39,6 +39,7 @@ const translations = {
     home: 'Accueil', servers: 'Mes MCP', activity: 'Activité', settings: 'Paramètres', help: 'Besoin d’aide ?', logout: 'Se déconnecter', loading: 'Chargement…',
     welcome: 'Bonjour, Alex', heading: 'Que souhaitez-vous connecter ?', subheading: 'Décrivez votre projet. MCPEX analyse votre site et vous guide pour créer un MCP.', generatedTitle: 'Votre MCP est généré', generatedSubtitle: 'Le MCP de base est prêt à être utilisé. Vous pouvez ajouter le code source pour enrichir ses routes.', enrichPrompt: 'Le MCP de base est prêt. Ajoutez l’accès au code pour enrichir les outils et les routes détectés.', codeSource: 'Source du code', repoUrl: 'URL du dépôt GitHub', branch: 'Branche', githubToken: 'Jeton GitHub (si privé)', optionalToken: 'Facultatif pour un dépôt public', wordpressUrl: 'URL WordPress (facultatif)', enrichButton: 'Enrichir le MCP', enriching: 'Enrichissement…',
     urlLabel: 'URL de votre site', placeholder: 'https://votre-site.com', analyze: 'Analyser le site', secure: 'Vos données restent privées et sécurisées',
+    loginPrompt: 'Ce site nécessite une connexion (espace membre, compte)', loginAndAnalyze: 'Se connecter & Analyser', loggingIn: 'Connexion en cours…', loginWindowHelp: 'Une fenêtre s’ouvre pour vous connecter au site. Elle se fermera automatiquement dès la connexion réussie.',
     recent: 'Récemment consultés', seeAll: 'Tout voir', active: 'Actif', attention: 'Action requise', routes: 'routes', updated: 'Mis à jour',
     integrations: 'Sources compatibles', github: 'Dépôt GitHub', wordpress: 'WordPress', more: 'Et bien plus',
     mcpTitle: 'Mes MCP', mcpDescription: 'Retrouvez vos connexions, leurs routes et leur état.', search: 'Rechercher un MCP…', all: 'Tous',
@@ -55,6 +56,7 @@ const translations = {
     home: 'Home', servers: 'My MCPs', activity: 'Activity', settings: 'Settings', help: 'Need help?', logout: 'Sign out', loading: 'Loading…',
     welcome: 'Hello, Alex', heading: 'What would you like to connect?', subheading: 'Describe your project. MCPEX analyses your site and guides you through creating an MCP.', generatedTitle: 'Your MCP is ready', generatedSubtitle: 'Your base MCP is ready to use. You can add source code access to enrich its routes.', enrichPrompt: 'Your base MCP is ready. Add source code access to enrich the detected tools and routes.', codeSource: 'Code source', repoUrl: 'GitHub repository URL', branch: 'Branch', githubToken: 'GitHub token (if private)', optionalToken: 'Optional for public repositories', wordpressUrl: 'WordPress URL (optional)', enrichButton: 'Enrich MCP', enriching: 'Enriching…',
     urlLabel: 'Website URL', placeholder: 'https://your-website.com', analyze: 'Analyse website', secure: 'Your data stays private and secure',
+    loginPrompt: 'This site requires login (member area, account)', loginAndAnalyze: 'Log in & Analyse', loggingIn: 'Logging in…', loginWindowHelp: 'A window will open for you to log in. It will close automatically upon successful login.',
     recent: 'Recently viewed', seeAll: 'View all', active: 'Active', attention: 'Action required', routes: 'routes', updated: 'Updated',
     integrations: 'Compatible sources', github: 'GitHub repository', wordpress: 'WordPress', more: 'And many more',
     mcpTitle: 'My MCPs', mcpDescription: 'Manage your connections, routes and status.', search: 'Search MCPs…', all: 'All',
@@ -145,6 +147,7 @@ function Sidebar({ page, setPage, t, onNew, language, setLanguage, onAuth, serve
 
 function Home({ t, language, servers, onSelect, onViewAll, onAnalyze, stage, analyzedUrl, setStage, generated, needsEnrichment, busy, error, onEnrich }) {
   const [url, setUrl] = useState('')
+  const [needsAuth, setNeedsAuth] = useState(false)
   const [source, setSource] = useState('github')
   const [repoUrl, setRepoUrl] = useState('')
   const [branch, setBranch] = useState('main')
@@ -152,7 +155,7 @@ function Home({ t, language, servers, onSelect, onViewAll, onAnalyze, stage, ana
   const [wpUrl, setWpUrl] = useState('')
   function submit(event) {
     event.preventDefault()
-    if (url.trim()) onAnalyze(url.trim())
+    if (url.trim()) onAnalyze(url.trim(), needsAuth)
   }
   return <main className="main-content home-content">
     <div className="home-toolbar"><span className="breadcrumb">{t.workspace} <span>/</span> {t.home}</span><button className="quiet-button"><Icon name="help" size={17} />{language === 'fr' ? 'Guide de démarrage' : 'Getting started'}</button></div>
@@ -174,9 +177,15 @@ function Home({ t, language, servers, onSelect, onViewAll, onAnalyze, stage, ana
         <h1>{t.heading}</h1>
         <p className="hero-subtitle">{t.subheading}</p>
         <form className={`url-composer ${stage === 'analyzing' ? 'is-loading' : ''}`} onSubmit={submit}>
-          {stage === 'analyzing' ? <div className="loading-view"><span className="spinner" /><div><strong>{t.analyzing}</strong><span>{analyzedUrl}</span></div></div> : <>
+          {stage === 'analyzing' ? <div className="loading-view"><span className="spinner" /><div><strong>{needsAuth ? t.loggingIn : t.analyzing}</strong><span>{analyzedUrl}</span>{needsAuth && <p style={{ fontSize: '0.82rem', color: '#2563eb', marginTop: '0.35rem' }}>{t.loginWindowHelp}</p>}</div></div> : <>
             <label htmlFor="site-url">{t.urlLabel}</label>
-            <div className="url-input-row"><Icon name="globe" size={19} /><input id="site-url" type="url" placeholder={t.placeholder} value={url} onChange={e => setUrl(e.target.value)} required /><button className="primary-button" type="submit" disabled={busy}>{busy ? t.analyzing : t.analyze}<Icon name="arrow" size={16} /></button></div>
+            <div className="url-input-row"><Icon name="globe" size={19} /><input id="site-url" type="url" placeholder={t.placeholder} value={url} onChange={e => setUrl(e.target.value)} required /><button className="primary-button" type="submit" disabled={busy}>{needsAuth ? <><Icon name="lock" size={16} /> {busy ? t.loggingIn : t.loginAndAnalyze}</> : <>{busy ? t.analyzing : t.analyze}<Icon name="arrow" size={16} /></>}</button></div>
+            <div style={{ margin: '0.6rem 0 0.4rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={needsAuth} onChange={e => setNeedsAuth(e.target.checked)} style={{ cursor: 'pointer', accentColor: '#1e3a8a' }} />
+                <span>{t.loginPrompt}</span>
+              </label>
+            </div>
             <div className="composer-footer"><span><Icon name="lock" size={14} /> {t.secure}</span><span>{t.firstStep}</span></div>
           </>}
           {stage === 'analyzing' && <div className="analysis-steps"><span className="step-done"><Icon name="check" size={14} /> {t.step1}</span><span className="step-current"><i /> {t.step2}</span><span>{t.step3}</span></div>}
@@ -282,10 +291,12 @@ export default function App() {
   }
   useEffect(() => { refreshServers() }, [])
   function beginNew() { setPage('home'); setStage('idle'); setSelected(null); window.setTimeout(() => document.getElementById('site-url')?.focus(), 50) }
-  async function analyzeUrl(url) {
+  async function analyzeUrl(url, isInteractive = false) {
     setAnalyzedUrl(url); setStage('analyzing'); setBusy(true); setError('')
     try {
-      const result = await generateMcp(url)
+      const result = isInteractive
+        ? await generateMcpInteractive(url)
+        : await generateMcp(url)
       const detail = await getMcpServer(result.server_id)
       const normalized = normalizeServer(detail)
       setGenerated({ ...result, ...detail }); setNeedsEnrichment((detail.scanSummary?.inputsDetected ?? 0) === 0 || (detail.scanSummary?.buttonsDetected ?? 0) === 0)

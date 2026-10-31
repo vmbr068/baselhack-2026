@@ -158,6 +158,8 @@ export class WordpressEnricherService {
         },
         executionStep:
           ep.category === 'booking' ? 'reserve_room' : 'check_availability',
+        requires_confirmation: ep.category === 'booking',
+        is_irreversible: ep.category === 'booking',
         selectorsMapping: {},
         executionMode: 'hybrid',
         apiEndpoint: `${baseUrl}${ep.route}`,

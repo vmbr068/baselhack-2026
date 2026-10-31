@@ -41,6 +41,8 @@ export interface MCPToolDefinition {
   apiEndpoint?: string;
   apiMethod?: 'GET' | 'POST' | 'PUT';
   sourceOrigin?: 'dom' | 'wordpress' | 'github';
+  requires_confirmation?: boolean;
+  is_irreversible?: boolean;
 }
 
 export interface MCPServerConfig {
@@ -57,14 +59,28 @@ export interface MCPServerConfig {
   };
 }
 
+export interface ConfirmationDetails {
+  token: string;
+  summary: string;
+  hotel: string;
+  action: string;
+  details: Record<string, any>;
+  expires_at: string;
+}
+
 export interface ToolCallRequest {
   tool_name: string;
   arguments?: Record<string, any>;
+  confirmed_by_human?: boolean;
+  confirmation_token?: string;
 }
 
 export interface ToolCallResponse {
   tool_name: string;
   success: boolean;
+  status?: 'executed' | 'pending_confirmation' | 'rejected';
+  confirmation_required?: boolean;
+  confirmation_details?: ConfirmationDetails;
   data: Record<string, any>;
   screenshot_url?: string | null;
   error?: string | null;

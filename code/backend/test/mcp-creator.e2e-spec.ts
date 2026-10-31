@@ -46,6 +46,18 @@ describe('McpCreatorController (e2e)', () => {
     expect(toolNames).toContain('check_availability');
     expect(toolNames).toContain('reserve_room');
     expect(toolNames).toContain('get_current_status');
+
+    const reserveTool = res.body.tools.find(
+      (t: any) => t.name === 'reserve_room',
+    );
+    expect(reserveTool.requires_confirmation).toBe(true);
+    expect(reserveTool.is_irreversible).toBe(true);
+
+    const searchTool = res.body.tools.find(
+      (t: any) => t.name === 'check_availability',
+    );
+    expect(searchTool.requires_confirmation).toBe(false);
+    expect(searchTool.is_irreversible).toBe(false);
   }, 30000);
 
   it('/api/v1/servers/:id/call (POST) should execute check_availability via Playwright', async () => {
@@ -62,11 +74,14 @@ describe('McpCreatorController (e2e)', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('executed');
     expect(res.body.data.rooms_count).toBe(3);
     expect(res.body.data.available_rooms.length).toBe(3);
   }, 30000);
 
-  it('/api/v1/servers/:id/call (POST) should execute reserve_room via Playwright', async () => {
+  let pendingToken: string;
+
+  it('/api/v1/servers/:id/call (POST) should BLOCK reserve_room when human confirmation is missing', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/servers/latest/call')
       .send({
@@ -79,11 +94,60 @@ describe('McpCreatorController (e2e)', () => {
       });
 
     expect(res.status).toBe(201);
+    expect(res.body.success).toBe(false);
+    expect(res.body.status).toBe('pending_confirmation');
+    expect(res.body.confirmation_required).toBe(true);
+    expect(res.body.confirmation_details).toBeDefined();
+    expect(res.body.confirmation_details.token).toMatch(/^conf_tok_/);
+    expect(res.body.confirmation_details.summary).toContain(
+      'Human approval required',
+    );
+    expect(res.body.confirmation_details.hotel).toContain('Grand Hotel Basel');
+    expect(res.body.data.blocked).toBe(true);
+
+    pendingToken = res.body.confirmation_details.token;
+  });
+
+  it('/api/v1/servers/:id/call (POST) should PROCEED with reserve_room when explicitly confirmed by human', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/servers/latest/call')
+      .send({
+        tool_name: 'reserve_room',
+        confirmed_by_human: true,
+        confirmation_token: pendingToken,
+        arguments: {
+          room_title: 'Deluxe Rhine View Suite',
+          guest_name: 'Sacha Ramstein',
+          guest_email: 'sacha@baselhack.ch',
+        },
+      });
+
+    expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('executed');
     expect(res.body.data.status).toBe('confirmed');
     expect(res.body.data.confirmation_summary).toContain(
       'Reservation Confirmed',
     );
+  }, 30000);
+
+  it('/api/v1/servers/:id/call (POST) should accept confirmed_by_human flag passed directly inside tool arguments', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/servers/latest/call')
+      .send({
+        tool_name: 'reserve_room',
+        arguments: {
+          room_title: 'Deluxe Rhine View Suite',
+          guest_name: 'Sacha Ramstein',
+          guest_email: 'sacha@baselhack.ch',
+          confirmed_by_human: true,
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('executed');
+    expect(res.body.data.status).toBe('confirmed');
   }, 30000);
 
   it('/mock-wp/wp-json (GET) should serve mock WordPress REST API schema', async () => {

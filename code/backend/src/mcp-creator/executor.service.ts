@@ -11,6 +11,15 @@ export class ExecutorService {
     process.cwd(),
     'static/screenshots',
   );
+  private readonly pendingConfirmations = new Map<
+    string,
+    {
+      serverId: string;
+      toolName: string;
+      args: Record<string, any>;
+      expiresAt: number;
+    }
+  >();
 
   constructor() {
     fs.mkdir(this.screenshotDir, { recursive: true }).catch(() => {});
@@ -20,6 +29,8 @@ export class ExecutorService {
     config: MCPServerConfig,
     toolName: string,
     args: Record<string, any> = {},
+    confirmedByHuman?: boolean,
+    confirmationToken?: string,
     headless = true,
   ): Promise<ToolCallResponse> {
     const toolDef = config.tools.find((t) => t.name === toolName);
@@ -27,9 +38,100 @@ export class ExecutorService {
       return {
         tool_name: toolName,
         success: false,
+        status: 'rejected',
         data: {},
         error: `Tool '${toolName}' not found in configuration for ${config.hotelName}`,
       };
+    }
+
+    // Determine if tool represents an irreversible action (e.g. reservation, booking, payment)
+    const isIrreversible = Boolean(
+      toolDef.is_irreversible ||
+      toolDef.requires_confirmation ||
+      toolDef.executionStep === 'reserve_room' ||
+      toolName.toLowerCase().includes('reserve') ||
+      toolName.toLowerCase().includes('book') ||
+      toolName.toLowerCase().includes('pay'),
+    );
+
+    const isExplicitlyConfirmed = Boolean(
+      confirmedByHuman === true ||
+      args.confirmed_by_human === true ||
+      args.confirmed_by_human === 'true',
+    );
+
+    const token = confirmationToken || args.confirmation_token;
+
+    // Safety Guardrail: Block execution without explicit human approval
+    if (isIrreversible && !isExplicitlyConfirmed) {
+      const generatedToken = `conf_tok_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+      this.pendingConfirmations.set(generatedToken, {
+        serverId: config.serverId,
+        toolName,
+        args,
+        expiresAt: Date.now() + 15 * 60 * 1000,
+      });
+
+      const summary = `Human approval required: Book '${args.room_title || 'Selected Room'}' at '${config.hotelName}' for ${args.guest_name || 'Guest'} (${args.guest_email || 'No email specified'}).`;
+
+      this.logger.warn(
+        `[GUARDRAIL] Execution blocked for irreversible action '${toolName}' on '${config.hotelName}'. Pending token: ${generatedToken}`,
+      );
+
+      return {
+        tool_name: toolName,
+        success: false,
+        status: 'pending_confirmation',
+        confirmation_required: true,
+        confirmation_details: {
+          token: generatedToken,
+          summary,
+          hotel: config.hotelName,
+          action: toolName,
+          details: {
+            room_title: args.room_title,
+            guest_name: args.guest_name,
+            guest_email: args.guest_email,
+            guest_phone: args.guest_phone,
+            special_requests: args.special_requests,
+            target_url: config.targetUrl,
+          },
+          expires_at: expiresAt,
+        },
+        data: {
+          blocked: true,
+          message: `ACTION BLOCKED: Irreversible action '${toolName}' on '${config.hotelName}' requires explicit human confirmation.`,
+          required_action: {
+            summary,
+            token: generatedToken,
+            instructions: `To proceed, ask the human user to confirm. Once confirmed, call this tool again with confirmed_by_human=true and confirmation_token='${generatedToken}'.`,
+          },
+        },
+      };
+    }
+
+    if (isIrreversible && isExplicitlyConfirmed) {
+      if (token) {
+        const pending = this.pendingConfirmations.get(token);
+        if (pending && pending.expiresAt < Date.now()) {
+          this.pendingConfirmations.delete(token);
+          return {
+            tool_name: toolName,
+            success: false,
+            status: 'rejected',
+            data: {},
+            error: `Confirmation token '${token}' has expired. Please request human approval again.`,
+          };
+        }
+        if (pending) {
+          this.pendingConfirmations.delete(token);
+        }
+      }
+      this.logger.log(
+        `[GUARDRAIL AUDIT] Human confirmation verified for irreversible tool '${toolName}' on '${config.hotelName}'. Proceeding with execution.`,
+      );
     }
 
     // Direct API Execution (if tool was enriched with a direct backend API endpoint)
@@ -66,6 +168,7 @@ export class ExecutorService {
           return {
             tool_name: toolName,
             success: true,
+            status: 'executed',
             data: apiData,
             executedVia: 'api',
           };
@@ -166,6 +269,7 @@ export class ExecutorService {
         return {
           tool_name: toolName,
           success: true,
+          status: 'executed',
           data: {
             hotel: config.hotelName,
             check_in: checkIn,
@@ -268,6 +372,7 @@ export class ExecutorService {
         return {
           tool_name: toolName,
           success: true,
+          status: 'executed',
           data: {
             status: 'confirmed',
             hotel: config.hotelName,
@@ -286,6 +391,7 @@ export class ExecutorService {
       return {
         tool_name: toolName,
         success: true,
+        status: 'executed',
         data: { title: await page.title(), url: page.url() },
         screenshot_url: `/static/screenshots/${filename}`,
       };
@@ -294,6 +400,7 @@ export class ExecutorService {
       return {
         tool_name: toolName,
         success: false,
+        status: 'rejected',
         data: {},
         error: err.message,
       };

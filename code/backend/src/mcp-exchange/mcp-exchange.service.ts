@@ -4,10 +4,7 @@ import * as fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { McpCreatorService } from '../mcp-creator/mcp-creator.service.js';
 import type { MCPServerConfig } from '../mcp-creator/mcp-creator.types.js';
-import type {
-  ExchangeEntry,
-  PublishResponse,
-} from './mcp-exchange.types.js';
+import type { ExchangeEntry, PublishResponse } from './mcp-exchange.types.js';
 
 @Injectable()
 export class McpExchangeService implements OnModuleInit {
@@ -39,7 +36,9 @@ export class McpExchangeService implements OnModuleInit {
         `Loaded ${this.entriesStore.size} published Exchange entries from disk`,
       );
     } catch (err: any) {
-      this.logger.warn(`Could not load Exchange entries from disk: ${err.message}`);
+      this.logger.warn(
+        `Could not load Exchange entries from disk: ${err.message}`,
+      );
     }
   }
 
@@ -60,7 +59,10 @@ export class McpExchangeService implements OnModuleInit {
     return `ex_${slug}_${hash}`;
   }
 
-  async publish(serverId: string, description?: string): Promise<PublishResponse> {
+  async publish(
+    serverId: string,
+    description?: string,
+  ): Promise<PublishResponse> {
     const config = this.mcpCreator.getServer(serverId);
     // Snapshot so later enrichments of the live server don't mutate what was published
     const snapshot: MCPServerConfig = JSON.parse(JSON.stringify(config));

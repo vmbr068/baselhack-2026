@@ -34,6 +34,21 @@ export class ToolCallRequestDto {
     },
   })
   arguments?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description:
+      'Explicit human confirmation flag required before executing irreversible tools (e.g. reserve_room)',
+    example: true,
+    default: false,
+  })
+  confirmed_by_human?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Unique confirmation token issued by the pending confirmation request',
+    example: 'conf_tok_1710000000000_abc123',
+  })
+  confirmation_token?: string;
 }
 
 export class EnrichWordpressDto {

@@ -51,6 +51,17 @@ flowchart LR
 3. Connect an agent to the server's endpoint.
 4. Ask the agent to book a room. It searches, prepares the booking, and waits for a human to approve it.
 
+## BaselHack demo
+
+Follow these steps to run the demo end to end:
+
+1. **Open the MCP creator** on the [app](https://app.bh2026.tekitup.net) and enter the URL of the site you want to test. For the demo, use the demo hotel: `https://hotel.bh2026.tekitup.net/`.
+2. **Create the MCP.** MCPEX scans the site and generates a server with typed tools.
+3. **Enrich it with the code.** Provide the link to the site's repository, here [hotel-website-demo](https://github.com/agrand2004/hotel-website-demo), so the MCP can call the internal API routes directly.
+4. **Copy the MCP URL** (the `mcpconfig.json` entry) from the dashboard.
+5. **Add it to your agent's configuration** so the MCP becomes available to it. See [Connect an agent](#connect-an-agent).
+6. **Chat with your AI** to use the MCP. For example, ask it to book a room: it searches, prepares the booking, and waits for your approval before confirming.
+
 ## Features
 
 - **MCP generation:** turns a website into a server with typed tools, using a real browser.

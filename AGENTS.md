@@ -1,4 +1,4 @@
-# Project context — Name: TBD
+# Project context — Name: MCPEX
 
 > Source of truth for every AI assistant working on this repository
 > (Claude, ChatGPT, Gemini, Codex, Cursor…). `CLAUDE.md` and `GEMINI.md` only
@@ -46,7 +46,7 @@ This scenario is the MVP and the definition of "done":
 ## 5. Hackathon constraints
 
 - Duration: **2 days**.
-- Team: **6 people**, varied developer profiles.
+- Team: **8 people**, varied developer profiles.
 - Deliverable: **pitch + live demo**.
 - Consequence: favour a working, demonstrable end-to-end flow over completeness.
 

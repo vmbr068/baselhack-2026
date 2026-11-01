@@ -28,12 +28,11 @@ Vite prints the local URL when the development server starts.
 
 ## Interface
 
-- Home page that generates an MCP from a website URL and can enrich it with GitHub or WordPress data when the scan finds little page structure.
-- MCP list loaded from the backend, with details and tools/routes loaded on demand.
-- Activity view derived from server creation and code enrichment timestamps returned by the backend.
-- Sign-in and sign-up screens with a French/English language switch.
+- Home page that generates an MCP from a website URL, with an optional interactive login for sites that need one. The result can be enriched with GitHub or WordPress data.
+- MCP server list with search, status filters and pagination.
+- Details drawer to manage a server's routes and copy its MCP endpoint.
 
-The interface is in French by default. Switch languages with the control at the bottom of the sidebar.
+The interface is in English by default. Switch between English and French with the control in the header.
 
 ## Backend connection
 
@@ -45,4 +44,4 @@ MCPEX_BACKEND_URL=http://localhost:3001 npm run dev
 
 The frontend calls the generation, server, OAuth connection, enrichment, and enable/disable endpoints. Register the GitHub and WordPress.com OAuth applications with the callback URLs listed in the backend README. Configure their client credentials and `MCPEX_FRONTEND_URL` in the backend environment. For a deployed frontend, set `VITE_API_BASE_URL` to the full API base URL.
 
-Provider access tokens stay in frontend memory and must be reconnected after a page reload. Sign-in/sign-up for MCPEX and the activity log are not backed by account endpoints; the activity view derives entries from server creation and enrichment timestamps.
+Provider access tokens stay in frontend memory and must be reconnected after a page reload.

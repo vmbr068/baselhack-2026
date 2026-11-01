@@ -73,6 +73,7 @@ You need Node.js 24 and npm. Run each service in its own terminal.
 # Backend: http://localhost:3000 (API docs at /docs)
 cd code/backend
 npm ci
+npx playwright install chromium
 npm run start:dev
 ```
 
@@ -99,7 +100,7 @@ curl -X POST localhost:3000/api/v1/generate \
 | Stdio | Claude Desktop, local CLI agents | `node code/backend/bin/mcp-runner.mjs <id>` |
 | REST | Custom scripts | `POST /api/v1/servers/<id>/call` |
 
-Use `latest` as the `<id>` to target the most recent server. See the [full tutorial](documentation/TUTORIAL_CONNECT_AGENTS.md) for each agent's configuration.
+Use `latest` as the `<id>` to target the most recent server. See the [full tutorial](documentation/TUTORIAL_CONNECT_AGENTS.md) for each agent's configuration, and the [setup guide](documentation/local-setup.md) for environment variables.
 
 ## Repository layout
 

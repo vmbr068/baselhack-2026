@@ -44,13 +44,6 @@ flowchart LR
     Exec -- "browser or API" --> Site["Website"]
 ```
 
-## Demo
-
-1. Open the [app](https://app.bh2026.tekitup.net) and enter `https://hotel.bh2026.tekitup.net`, a booking site with no MCP and no public API.
-2. MCPEX generates a server with tools such as `check_availability` and `reserve_room`.
-3. Connect an agent to the server's endpoint.
-4. Ask the agent to book a room. It searches, prepares the booking, and waits for a human to approve it.
-
 ## BaselHack demo
 
 Follow these steps to run the demo end to end:

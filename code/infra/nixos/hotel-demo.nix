@@ -86,6 +86,7 @@ in
       reverse_proxy localhost:3001
     }
     handle {
+      encode zstd gzip
       root * ${package}/lib/hotel-demo/apps/web/dist
       try_files {path} /index.html
       file_server

@@ -1,9 +1,24 @@
-# Infrastructure
+<p align="center">
+  <img src="../../assets/logo.png" alt="MCPEX logo" width="96">
+</p>
 
-The repository holds everything needed to rebuild `mcp-exchange-01`. Secrets and
-the OpenTofu state are versioned encrypted.
+<h1 align="center">MCPEX infrastructure</h1>
 
-You need Nix with flakes and a PGP key listed in `.sops.yaml`.
+<p align="center">
+  <strong>Everything needed to rebuild and deploy <code>mcp-exchange-01</code>.</strong>
+</p>
+
+<p align="center">
+  <a href="../../readme.md">MCPEX</a> ·
+  <a href="../backend/README.md">Backend</a> ·
+  <a href="../frontend/README.md">Frontend</a>
+</p>
+
+---
+
+## Overview
+
+Secrets and the OpenTofu state are versioned encrypted. You need Nix with flakes and a PGP key listed in `.sops.yaml`.
 
 ## Deploy or rebuild the VM
 

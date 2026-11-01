@@ -1,22 +1,69 @@
-# MCPEX backend
+<p align="center">
+  <img src="../../assets/logo.png" alt="MCPEX logo" width="96">
+</p>
 
-NestJS backend application with integrated **Model Context Protocol (MCP) Creator** for scanning hotel booking websites and executing reservation tools dynamically.
+<h1 align="center">MCPEX backend</h1>
 
-### MCP Creator Endpoints
+<p align="center">
+  <strong>The NestJS API that generates, runs and exposes MCP servers.</strong>
+</p>
 
-- `POST /api/v1/generate`: Scans a hotel URL, synthesizes MCP tools, and registers the server (`{ "url": "..." }`).
-- `POST /api/v1/scan`: Scans a URL and returns extracted forms, inputs, and buttons.
-- `GET /api/v1/servers`: Lists all generated MCP servers and their enabled state.
-- `GET /api/v1/servers/:id`: Retrieves tool schemas for a specific MCP server.
-- `PATCH /api/v1/servers/:id` (`{ "enabled": false }`): Enables or disables an MCP server.
-- `PATCH /api/v1/servers/:id/tools/:toolName` (`{ "enabled": false }`): Enables or disables a tool. Disabled servers and tools cannot be called through the API.
-- `GET /api/v1/servers/:id/connect/github` and `/connect/wordpress?site_url=...`: Start provider OAuth.
-- `POST /api/v1/oauth/:provider/consume` (`{ "ticket": "...", "serverId": "..." }`): Exchanges a short-lived, one-use OAuth ticket for an access token.
-- `POST /api/v1/servers/:id/call`: Executes an MCP tool (`check_availability` or `reserve_room`) via Playwright on the live site.
-- `GET /api/v1/servers/:id/mcp/sse` and `POST /api/v1/servers/:id/mcp/messages`: MCP transport for agents (see [Connecting agents](../../documentation/TUTORIAL_CONNECT_AGENTS.md)).
-- `GET /mock-hotel`: Local Swiss hotel booking page for self-contained testing.
+<p align="center">
+  <a href="../../readme.md">MCPEX</a> ·
+  <a href="../../documentation/local-setup.md">Setup guide</a> ·
+  <a href="../../documentation/TUTORIAL_CONNECT_AGENTS.md">Connect an agent</a> ·
+  <a href="../frontend/README.md">Frontend</a> ·
+  <a href="../infra/README.md">Infrastructure</a>
+</p>
 
-Interactive API docs are served at `/docs`. The MCP Exchange API is described in [mcp-exchange.md](../../documentation/mcp-exchange.md).
+---
+
+## Overview
+
+The backend scans websites, synthesizes MCP tools, runs them with Playwright and serves them to agents. It also hosts the [MCP Exchange](../../documentation/mcp-exchange.md).
+
+## Quick start
+
+From `code/backend`:
+
+```bash
+npm ci
+npx playwright install chromium
+npm run start:dev
+```
+
+The API runs on http://localhost:3000, with interactive docs at `/docs`.
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run start` | Start the backend. |
+| `npm run start:dev` | Start in watch mode. |
+| `npm run start:prod` | Run the production build. |
+| `npm run test` | Run the unit tests. |
+| `npm run test:e2e` | Run the end-to-end tests. |
+| `npm run test:cov` | Run the tests with coverage. |
+
+## Endpoints
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/v1/generate` | Scan a URL, synthesize MCP tools and register the server (`{ "url": "..." }`). |
+| `POST /api/v1/scan` | Scan a URL and return its forms, inputs and buttons. |
+| `GET /api/v1/servers` | List generated servers and their enabled state. |
+| `GET /api/v1/servers/:id` | Get a server's tool schemas. |
+| `PATCH /api/v1/servers/:id` | Enable or disable a server (`{ "enabled": false }`). |
+| `PATCH /api/v1/servers/:id/tools/:toolName` | Enable or disable a tool (`{ "enabled": false }`). |
+| `POST /api/v1/servers/:id/call` | Run a tool such as `check_availability` or `reserve_room` on the live site. |
+| `GET /api/v1/servers/:id/mcp/sse` | Open the MCP connection for agents. |
+| `POST /api/v1/servers/:id/mcp/messages` | Send MCP messages from agents. |
+| `GET /api/v1/servers/:id/connect/github` | Start GitHub OAuth. |
+| `GET /api/v1/servers/:id/connect/wordpress?site_url=...` | Start WordPress OAuth. |
+| `POST /api/v1/oauth/:provider/consume` | Exchange a short-lived, one-use ticket for an access token (`{ "ticket": "...", "serverId": "..." }`). |
+| `GET /mock-hotel` | Serve a local hotel page for testing. |
+
+Disabled servers and tools cannot be called through the API. The Exchange API is described in [mcp-exchange.md](../../documentation/mcp-exchange.md).
 
 ## OAuth configuration
 
@@ -29,42 +76,9 @@ Configure `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URL
 
 OAuth access tokens are exchanged server-side, held in memory for a one-use ticket for 60 seconds, and returned to the frontend only after that ticket is consumed. The frontend keeps tokens in memory and sends them with the enrichment request; reconnect after a page reload or backend restart. The current prototype does not yet have MCPEX user accounts or per-user server ownership.
 
-## Project setup
-
-```bash
-npm ci
-npx playwright install chromium
-```
-
-## Compile and run the project
-
-```bash
-# development
-npm run start
-
-# watch mode
-npm run start:dev
-
-# production mode
-npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-npm run test
-
-# e2e tests
-npm run test:e2e
-
-# test coverage
-npm run test:cov
-```
-
 ## Configuration
 
-Environment variables are listed in the [local setup guide](../../documentation/local-setup.md#environment-variables).
+Environment variables are listed in the [setup guide](../../documentation/local-setup.md#environment-variables).
 
 ## Deployment
 

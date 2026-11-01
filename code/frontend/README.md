@@ -1,24 +1,38 @@
-# MCPEX frontend
+<p align="center">
+  <img src="../../assets/logo.png" alt="MCPEX logo" width="96">
+</p>
 
-React frontend for the MCPEX workspace, built with Vite and styled with Adobe Spectrum 2 icons and design conventions.
+<h1 align="center">MCPEX frontend</h1>
 
-## Requirements
+<p align="center">
+  <strong>The React dashboard for creating and managing MCP servers.</strong>
+</p>
 
-- Node.js
-- npm
+<p align="center">
+  <a href="../../readme.md">MCPEX</a> ·
+  <a href="../../documentation/local-setup.md">Setup guide</a> ·
+  <a href="../backend/README.md">Backend</a> ·
+  <a href="../infra/README.md">Infrastructure</a>
+</p>
 
-## Run locally
+---
 
-From this directory (`code/frontend`):
+## Overview
 
-```sh
-npm install
+Built with React and Vite, and styled with Adobe Spectrum 2 icons and design conventions.
+
+## Quick start
+
+You need Node.js and npm. From `code/frontend`:
+
+```bash
+npm ci
 npm run dev
 ```
 
-Vite prints the local URL when the development server starts.
+The app runs on http://localhost:5173.
 
-## Available scripts
+## Scripts
 
 | Command | Purpose |
 | --- | --- |
@@ -38,7 +52,7 @@ The interface is in English by default. Switch between English and French with t
 
 The Vite development server proxies `/api`, `/mock-hotel`, and `/static` to `https://api.bh2026.tekitup.net` by default. Set `MCPEX_BACKEND_URL` to use a local or alternate backend, for example:
 
-```sh
+```bash
 MCPEX_BACKEND_URL=http://localhost:3001 npm run dev
 ```
 

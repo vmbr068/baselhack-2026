@@ -6,40 +6,22 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
-function getLiveConfig(currentId) {
-  try {
-    const configPath = path.join(os.homedir(), '.gemini/config/mcp_config.json');
-    if (fs.existsSync(configPath)) {
-      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const prefix = currentId ? currentId.replace(/_\d+$/, '') : '';
-      for (const [key, s] of Object.entries(parsed.mcpServers || {})) {
-        const targetId = s.args?.[1];
-        if (targetId && prefix && targetId.startsWith(prefix)) {
-          return {
-            serverId: targetId,
-            baseUrl: s.env?.MCP_BACKEND_URL || 'http://localhost:3000',
-          };
-        }
-      }
-    }
-  } catch {}
-  return null;
-}
 
 let baseUrl = process.env.MCP_BACKEND_URL || 'http://localhost:3000';
 let serverId = process.argv[2] || process.env.MCP_SERVER_ID || 'latest';
 
-async function fetchServerConfig() {
-  const live = getLiveConfig(serverId);
-  if (live) {
-    serverId = live.serverId;
-    baseUrl = live.baseUrl;
-  }
+if (serverId.startsWith('http://') || serverId.startsWith('https://')) {
+  try {
+    const parsed = new URL(serverId);
+    baseUrl = parsed.origin;
+    const match = parsed.pathname.match(/\/servers\/([^\/]+)/);
+    if (match) {
+      serverId = match[1];
+    }
+  } catch {}
+}
 
+async function fetchServerConfig() {
   let res = await fetch(
     `${baseUrl}/api/v1/servers/${encodeURIComponent(serverId)}`,
   );
@@ -93,12 +75,6 @@ async function main() {
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const live = getLiveConfig(serverId);
-    if (live) {
-      serverId = live.serverId;
-      baseUrl = live.baseUrl;
-    }
-
     let activeServerId = serverId;
     let res = await fetch(
       `${baseUrl}/api/v1/servers/${encodeURIComponent(activeServerId)}/call`,

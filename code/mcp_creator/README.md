@@ -1,12 +1,40 @@
-# Dynamic Hotel MCP Creator (Backend for MCP Exchange)
+<p align="center">
+  <img src="../../assets/logo.png" alt="MCPEX logo" width="96">
+</p>
 
-> An autonomous tool that scans hotel booking websites and dynamically synthesizes a **Model Context Protocol (MCP)** server wrapper driven by **Playwright**.
+<h1 align="center">MCPEX standalone creator</h1>
 
-Built for **BaselHack 2026**.
+<p align="center">
+  <strong>A Python version of the MCP creator, built with FastAPI and Playwright.</strong>
+</p>
+
+<p align="center">
+  <a href="../../readme.md">MCPEX</a> ·
+  <a href="../../documentation/local-setup.md">Setup guide</a> ·
+  <a href="../backend/README.md">Backend</a>
+</p>
 
 ---
 
-## 🏗️ Architecture
+## Overview
+
+This optional service scans hotel booking websites and generates an MCP server wrapper for them. It runs separately from the [NestJS backend](../backend/README.md), which the MCPEX app uses.
+
+## Quick start
+
+Install it by following the [setup guide](../../documentation/local-setup.md#standalone-mcp-creator-optional), then start it from `code/mcp_creator`:
+
+```bash
+venv/bin/python -m uvicorn app:app --port 8000 --reload
+```
+
+| Page | URL |
+| --- | --- |
+| Dashboard | http://localhost:8000 |
+| API docs | http://localhost:8000/docs |
+| Test hotel | http://localhost:8000/mock-hotel |
+
+## Project structure
 
 ```
 code/mcp_creator/
@@ -24,32 +52,12 @@ code/mcp_creator/
 └── requirements.txt
 ```
 
----
+## Endpoints
 
-## 🚀 Getting Started
+### `POST /api/v1/generate`
 
-### 1. Activate Environment
-```bash
-source code/mcp_creator/venv/bin/activate
-```
+Scans a website and creates a ready-to-use MCP server.
 
-### 2. Start the MCP Exchange Backend
-```bash
-python -m code.mcp_creator.cli
-# Or: uvicorn code.mcp_creator.app:app --port 8000 --reload
-```
-
-Open your browser at:
-- **Interactive Dashboard**: `http://localhost:8000`
-- **Swagger API Docs**: `http://localhost:8000/docs`
-- **Built-in Mock Hotel**: `http://localhost:8000/mock-hotel`
-
----
-
-## 📡 API Endpoints for MCP Exchange
-
-### 1. `POST /api/v1/generate`
-Scans a target website and creates a ready-to-use MCP wrapper server.
 ```json
 // Request
 {
@@ -82,8 +90,10 @@ Scans a target website and creates a ready-to-use MCP wrapper server.
 }
 ```
 
-### 2. `POST /api/v1/servers/{server_id}/call`
-Executes an MCP tool on the target hotel website via Playwright:
+### `POST /api/v1/servers/{server_id}/call`
+
+Runs an MCP tool on the website with Playwright.
+
 ```json
 // Check availability
 {
@@ -100,21 +110,20 @@ Executes an MCP tool on the target hotel website via Playwright:
   "tool_name": "reserve_room",
   "arguments": {
     "room_title": "Deluxe Rhine View Suite",
-    "guest_name": "Sacha Ramstein",
-    "guest_email": "sacha@example.com",
+    "guest_name": "Jane Doe",
+    "guest_email": "jane.doe@example.com",
     "guest_phone": "+41 79 123 45 67",
     "special_requests": "High floor with river view"
   }
 }
 ```
 
-The response includes:
-- Live confirmation details from the page.
-- URL to the screenshot proof of reservation.
+The response includes the confirmation details from the page and a link to a screenshot.
 
----
+## Scan from the command line
 
-## 🛠️ CLI Quick Scan
+From `code/mcp_creator`:
+
 ```bash
-python -m code.mcp_creator.cli scan http://localhost:8000/mock-hotel
+venv/bin/python cli.py scan http://localhost:8000/mock-hotel
 ```

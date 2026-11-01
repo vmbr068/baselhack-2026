@@ -14,7 +14,9 @@ in
       handle @backend {
         reverse_proxy localhost:3000
       }
+      # Static files only: compressing /api could buffer the agents' SSE stream.
       handle {
+        encode zstd gzip
         root * ${frontend}
         file_server
       }

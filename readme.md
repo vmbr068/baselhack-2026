@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://app.bh2026.tekitup.net">Live app</a> ·
   <a href="https://hotel.bh2026.tekitup.net">Demo hotel</a> ·
-  <a href="assets/mcp-creator-launch-video-without-music.mp4">Launch video</a> ·
+  <a href="assets/MCPEX.mov">Launch video</a> ·
   <a href="documentation/TUTORIAL_CONNECT_AGENTS.md">Connect an agent</a> ·
   <a href="documentation/mcp-exchange.md">MCP Exchange</a>
 </p>
